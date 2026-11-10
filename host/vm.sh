@@ -11,6 +11,11 @@ if [ ! -f rootfs.ext4 ]; then
   command -v unsquashfs >/dev/null || sudo apt-get install -qq -y squashfs-tools >/dev/null
   rm -rf root && sudo unsquashfs -q -d root /opt/weaver/ubuntu.squashfs
   echo $name | sudo tee root/etc/hostname >/dev/null
+  echo "127.0.1.1 $name" | sudo tee -a root/etc/hosts >/dev/null
+  # No IPv6 in the VM; apt would try it first and stall. Canonical's
+  # Singapore mirror: some nodes of the EC2 regional one answer only 503.
+  echo 'Acquire::ForceIPv4 "true";' | sudo tee root/etc/apt/apt.conf.d/99ipv4 >/dev/null
+  sudo sed -i -E 's#http://(archive|security|[a-z0-9-]+\.ec2\.archive)\.ubuntu\.com#http://sg.archive.ubuntu.com#g' root/etc/apt/sources.list.d/ubuntu.sources
   printf 'nameserver 1.1.1.1\n' | sudo tee root/etc/resolv.conf >/dev/null
   truncate -s 4G rootfs.ext4 && sudo mkfs.ext4 -q -d root -F rootfs.ext4 && sudo rm -rf root
   sudo chown ubuntu: rootfs.ext4
