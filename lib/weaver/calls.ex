@@ -21,6 +21,9 @@ defmodule Weaver.Calls do
   @doc "Listen for `vm`'s calls, if not already."
   def ensure(vm), do: GenServer.call(__MODULE__, {:ensure, vm})
 
+  @doc "Stop listening for `vm`, which is going away: from here on it is nowhere."
+  def forget(vm), do: GenServer.call(__MODULE__, {:forget, vm})
+
   # The methods: what a program in the VM may ask of Weaver, and nothing more.
   # `tenant` is the VM the call came from; a method sees only that tenant.
   defp call(tenant, "whoami", _args), do: {:ok, %{tenant: tenant, host: node()}}
@@ -127,6 +130,18 @@ defmodule Weaver.Calls do
 
   @impl true
   def handle_call({:ensure, vm}, _from, state), do: {:reply, :ok, listen(state, vm)}
+
+  def handle_call({:forget, vm}, _from, state) do
+    {pid, state} = Map.pop(state, vm)
+
+    # Its socket and its `:pg` membership go with it.
+    if pid do
+      Process.unlink(pid)
+      Process.exit(pid, :kill)
+    end
+
+    {:reply, :ok, state}
+  end
 
   defp listen(state, vm) when is_map_key(state, vm), do: state
 

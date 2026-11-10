@@ -17,6 +17,8 @@ defmodule WeaverWeb.Router do
   scope "/api", WeaverWeb do
     pipe_through(:api)
     post("/login", AuthController, :login)
+    # Only on the platform's host (`WeaverWeb.Plugs.Tenant`).
+    post("/signup", SignupController, :create)
   end
 
   scope "/api", WeaverWeb do

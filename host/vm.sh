@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# vm.sh <name> <n> — create and start tenant VM <name> as systemd unit weaver-vm@<name>.
+# vm.sh <name> <n> — boot tenant VM <name>, whose disk is /opt/weaver/vms/<name>/rootfs.ext4, as systemd unit weaver-vm@<name>.
 # <n> (1..250) picks its network: tap fc<n>, host 172.16.<n>.1, guest 172.16.<n>.2, outbound NAT.
 # Control channel: weaver-guest on vsock port 1024, host side /opt/weaver/vms/<name>/vsock.sock.
 set -euo pipefail
@@ -7,21 +7,8 @@ name=$1 n=$2 dir=/opt/weaver/vms/$1
 if systemctl is-active -q weaver-vm@$name; then echo "$name is running" >&2; exit 1; fi
 mkdir -p $dir && cd $dir && echo $n > net
 
-if [ ! -f rootfs.ext4 ]; then
-  command -v unsquashfs >/dev/null || sudo apt-get install -qq -y squashfs-tools >/dev/null
-  rm -rf root && sudo unsquashfs -q -d root /opt/weaver/ubuntu.squashfs
-  echo $name | sudo tee root/etc/hostname >/dev/null
-  echo "127.0.1.1 $name" | sudo tee -a root/etc/hosts >/dev/null
-  # No IPv6 in the VM; apt would try it first and stall. The region's EC2
-  # mirror is the fast one, but some of its nodes answer only 503, so
-  # Canonical's own archive follows it: apt moves to the next URI of a source
-  # when one fails. (Canonical's Singapore mirror, tried before, crawls.)
-  echo 'Acquire::ForceIPv4 "true";' | sudo tee root/etc/apt/apt.conf.d/99ipv4 >/dev/null
-  sudo sed -i -E 's#^URIs: .*#URIs: http://ap-southeast-1.ec2.archive.ubuntu.com/ubuntu http://archive.ubuntu.com/ubuntu#' root/etc/apt/sources.list.d/ubuntu.sources
-  printf 'nameserver 1.1.1.1\n' | sudo tee root/etc/resolv.conf >/dev/null
-  truncate -s 4G rootfs.ext4 && sudo mkfs.ext4 -q -d root -F rootfs.ext4 && sudo rm -rf root
-  sudo chown ubuntu: rootfs.ext4
-fi
+# The disk is made once, at sign-up, as a copy of image.sh's image (`Weaver.Host.create/1`).
+[ -f rootfs.ext4 ] || { echo "$name has no disk" >&2; exit 1; }
 
 # What the platform puts in the VM is the platform's, not the tenant's: every
 # boot puts in the host's current one. The guest daemon; ripgrep for
@@ -48,6 +35,8 @@ sudo ln -sf /etc/systemd/system/weaver-guest.service mnt/etc/systemd/system/mult
 # its stub: give it the same servers the static resolv.conf names.
 sudo install -d mnt/etc/systemd/resolved.conf.d
 printf '[Resolve]\nDNS=1.1.1.1 8.8.8.8\n' | sudo tee mnt/etc/systemd/resolved.conf.d/weaver.conf >/dev/null
+echo $name | sudo tee mnt/etc/hostname >/dev/null
+grep -q " $name\$" mnt/etc/hosts || echo "127.0.1.1 $name" | sudo tee -a mnt/etc/hosts >/dev/null
 sudo umount mnt && rmdir mnt
 
 tap=fc$n

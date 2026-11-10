@@ -6,7 +6,7 @@ defmodule WeaverWeb.Plugs.RequireAuth do
 
   def call(conn, _opts) do
     with ["Bearer " <> token] <- get_req_header(conn, "authorization"),
-         :ok <- WeaverWeb.Auth.verify_token(token) do
+         :ok <- WeaverWeb.Auth.verify_token(token, conn.assigns.tenant) do
       conn
     else
       _ ->

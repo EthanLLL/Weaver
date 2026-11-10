@@ -40,6 +40,14 @@ export async function checkAuth(): Promise<void> {
   if (res?.status === 401) unauthorized()
 }
 
+// A sign-up on the platform's host ends here with the new tenant's token in
+// the URL's fragment, which no server sees: kept, and taken out of the URL.
+const handedOver = /^#token=(.+)$/.exec(location.hash)
+if (handedOver) {
+  localStorage.setItem(TOKEN_KEY, decodeURIComponent(handedOver[1]))
+  history.replaceState(null, "", location.pathname + location.search)
+}
+
 export function getToken(): string | null {
   const token = localStorage.getItem(TOKEN_KEY)
   if (token) return token
@@ -73,6 +81,22 @@ export async function login(password: string): Promise<string> {
   const data = await res.json()
   setToken(data.token)
   return data.token
+}
+
+/** Sign up, on the platform's host: where the new tenant's app is, and its token. */
+export async function signup(
+  name: string,
+  password: string,
+  invite: string,
+): Promise<{ url: string; token: string }> {
+  const res = await fetch("/api/signup", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, password, invite }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || `sign-up failed: ${res.status}`)
+  return data
 }
 
 function authHeaders(): Record<string, string> {

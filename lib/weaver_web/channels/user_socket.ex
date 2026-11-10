@@ -12,8 +12,8 @@ defmodule WeaverWeb.UserSocket do
 
   @impl true
   def connect(%{"token" => token}, socket, %{uri: %URI{host: host}}) do
-    with :ok <- WeaverWeb.Auth.verify_token(token),
-         {:ok, tenant} <- WeaverWeb.Tenant.from_host(host) do
+    with {:ok, tenant} <- WeaverWeb.Tenant.from_host(host),
+         :ok <- WeaverWeb.Auth.verify_token(token, tenant) do
       {:ok, assign(socket, :tenant, tenant)}
     else
       _ -> :error

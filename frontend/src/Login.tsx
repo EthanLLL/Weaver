@@ -33,7 +33,8 @@ export function Login({ onSuccess }: Props) {
   return (
     <div className="login">
       <form className="login-box" onSubmit={submit}>
-        <div className="login-title">loom</div>
+        <div className="login-title">weaver</div>
+        <div className="login-sub">{location.hostname.split(".")[0]}</div>
         <input
           type="password"
           className="login-input"

@@ -50,6 +50,8 @@ install -m 400 ~/.erlang.cookie.new ~/.erlang.cookie && rm ~/.erlang.cookie.new
 sudo install -d -m 755 /etc/weaver && sudo install -m 600 /opt/weaver/weaver.env.new /etc/weaver/weaver.env && rm /opt/weaver/weaver.env.new
 rm -rf /opt/weaver/app && mkdir -p /opt/weaver/app && tar xzf /opt/weaver/app.tgz -C /opt/weaver/app
 install -m 755 /opt/weaver/app/host/vm.sh /opt/weaver/vm.sh
+# The disk new tenants start from, built once per host (host/image.sh, about a minute).
+[ -f /opt/weaver/image.ext4 ] || bash /opt/weaver/app/host/image.sh | tail -1
 cd /opt/weaver/app && export MIX_ENV=prod && mix deps.get --only prod >/dev/null && mix compile >/dev/null
 sudo install -m 644 /opt/weaver/weaver.service /etc/systemd/system/weaver.service
 sudo systemctl daemon-reload && sudo systemctl enable -q weaver && sudo systemctl restart weaver

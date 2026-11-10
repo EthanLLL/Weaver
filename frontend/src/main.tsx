@@ -4,6 +4,7 @@ import './fonts.css'
 import './index.css'
 import './theme'
 import App from './App.tsx'
+import { Signup } from './Signup'
 import { registerWorker } from './push'
 import { fitToKeyboard } from './viewport'
 
@@ -12,6 +13,6 @@ registerWorker()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    {location.hostname.startsWith('weaver.') ? <Signup /> : <App />}
   </StrictMode>,
 )

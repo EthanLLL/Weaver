@@ -19,7 +19,9 @@ defmodule Weaver.Tenant do
   ## Started on demand, gone when idle
 
   `ensure/1` starts the tenant when anything needs it: a browser connecting,
-  an API call, a program in the VM calling out. The tenant then counts its
+  an API call, a scheduled prompt, a program in the VM calling out. A VM that
+  is not running is booted first (`Weaver.Host.boot/1`): one made at sign-up
+  has never run. The tenant then counts its
   holders (browser channels that `hold/2` it) and its live sessions and
   terminals; with none of either for `@idle_grace`, the whole tree stops.
   Everything it held is in the VM already, so stopping loses nothing, and
@@ -76,6 +78,10 @@ defmodule Weaver.Tenant do
 
   @doc false
   def start_here(t) do
+    with :ok <- Weaver.Host.boot(t), do: start_tree(t)
+  end
+
+  defp start_tree(t) do
     case DynamicSupervisor.start_child(Weaver.Tenants, {Weaver.Tenant.Tree, t}) do
       {:ok, _} -> local(t)
       {:error, {:already_started, _}} -> local(t)

@@ -14,6 +14,8 @@ defmodule Weaver.Application do
       Weaver.Repo,
       {Ecto.Migrator, repos: [Weaver.Repo]},
       {DynamicSupervisor, name: Weaver.Execs, strategy: :one_for_one},
+      # This host's VMs: made at sign-up, booted when first needed.
+      Weaver.Host,
       # One `Weaver.Tenant.Tree` per tenant whose VM is here and who is in use.
       {DynamicSupervisor, name: Weaver.Tenants, strategy: :one_for_one},
       Weaver.Calls,

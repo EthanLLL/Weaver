@@ -7,7 +7,7 @@ defmodule WeaverWeb.BrowserController do
   use WeaverWeb, :controller
 
   def vnc(conn, params) do
-    case WeaverWeb.Auth.verify_token(params["token"]) do
+    case WeaverWeb.Auth.verify_token(params["token"], conn.assigns.tenant) do
       :ok ->
         # A screen that doesn't change sends nothing, and noVNC doesn't ping, so
         # the idle limit is long; a dropped connection ends it either way.
