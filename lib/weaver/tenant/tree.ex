@@ -1,8 +1,8 @@
 defmodule Weaver.Tenant.Tree do
   @moduledoc """
   A tenant's processes, under `Weaver.Tenants` on its VM's node: its sessions,
-  its terminals, its codex app-server, its notifications (`Weaver.Push`),
-  its devices (`Weaver.Nodes`) and `Weaver.Tenant`. Stopped whole when the tenant idles.
+  its terminals, its codex app-server, its notifications (`Weaver.Push`)
+  and `Weaver.Tenant`. Stopped whole when the tenant idles.
   """
   use Supervisor, restart: :temporary
 
@@ -27,7 +27,6 @@ defmodule Weaver.Tenant.Tree do
       # The tenant's codex app-server, started only when a codex session needs it.
       {Weaver.Agent.Codex.Server, t},
       {Weaver.Push, t},
-      {Weaver.Nodes, t},
       {Tenant, t}
     ]
 

@@ -15,7 +15,7 @@ defmodule WeaverWeb.NodeSocket do
   @impl true
   def connect(%{"token" => token}, socket, %{uri: %URI{host: host}}) do
     with {:ok, t} <- WeaverWeb.Tenant.from_host(host),
-         {:ok, id} <- WeaverWeb.At.at(t, Nodes, :authenticate, [token]) do
+         {:ok, id} <- Nodes.authenticate(t, token) do
       {:ok, assign(socket, tenant: t, node_id: id)}
     else
       _ -> :error

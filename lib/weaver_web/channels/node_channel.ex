@@ -31,10 +31,11 @@ defmodule WeaverWeb.NodeChannel do
   def join("node", info, socket) do
     %{tenant: t, node_id: id} = socket.assigns
 
-    case WeaverWeb.At.at(t, Nodes, :connected, [id, self(), info]) do
-      {:ok, node} ->
+    case Nodes.connected(t, id, self(), info) do
+      {:ok, device} ->
         :ok = :pg.join(Weaver.PG, Nodes.group(t, id), self())
-        {:ok, %{name: node.name}, assign(socket, :requests, %{})}
+        Nodes.announce(device)
+        {:ok, %{name: device.name}, assign(socket, :requests, %{})}
 
       {:error, _} ->
         {:error, %{reason: "unknown device"}}
@@ -102,6 +103,15 @@ defmodule WeaverWeb.NodeChannel do
 
   # A newer connection from the same device, or its token was revoked.
   def handle_info(:node_replaced, socket), do: {:stop, {:shutdown, :replaced}, socket}
+
+  # Out of the group first, so the sidebar hears it offline.
+  @impl true
+  def terminate(_reason, %{assigns: %{tenant: t, node_id: id, requests: _}}) do
+    :pg.leave(Weaver.PG, Nodes.group(t, id), self())
+    Nodes.disconnected(t, id)
+  end
+
+  def terminate(_reason, _socket), do: :ok
 
   defp update(socket, fun), do: assign(socket, :requests, fun.(socket.assigns.requests))
 end

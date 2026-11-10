@@ -24,7 +24,7 @@ defmodule WeaverWeb.LobbyChannel do
     {:ok,
      %{
        sessions: Tenant.sessions(t),
-       nodes: WeaverWeb.At.at(t, Weaver.Nodes, :list, []),
+       nodes: Weaver.Nodes.list(t),
        apps: [],
        directory_order: Tenant.directory_order(t)
      }, socket}

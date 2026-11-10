@@ -8,9 +8,10 @@ defmodule Weaver.Push do
     from `/etc/weaver/weaver.env`), like the endpoint's secret: it says
     "Weaver sent this", and never goes into a VM. A subscription is still
     only good for the origin it was made on, a tenant's own host.
-  - **Subscriptions are the tenant's**, in their VM's `~/.loom/push.json`,
-    and each links back to the host it was made on: the tenant's, taken from
-    the request, not from what the browser says.
+  - **Subscriptions** are platform data, in `push_subscriptions` (this
+    process keeps its tenant's in memory, read at start). Each links back to
+    the host it was made on: the tenant's, taken from the request, not from
+    what the browser says.
   - **What is sent**, and **not to a device that is looking**: as in Loom. A
     session broadcasts `{:turn_ended, id, summary}` on
     `Weaver.Tenant.turns_topic/1`; a device showing a session says so on the
@@ -25,9 +26,12 @@ defmodule Weaver.Push do
   """
   use GenServer
 
+  import Ecto.Query
+
   require Logger
 
   alias Weaver.Push.WebPush
+  alias Weaver.Repo
   alias Weaver.Tenant
 
   @body_limit 180
@@ -89,9 +93,7 @@ defmodule Weaver.Push do
   def handle_call({:subscribe, subscription, origin, test}, _from, state) do
     case parse(subscription, origin) do
       {:ok, sub} ->
-        known = Map.get(state.subs, sub.endpoint, %{})
-        sub = Map.merge(sub, %{created_at: known[:created_at] || now_iso()})
-        state = save(put_in(state.subs[sub.endpoint], sub))
+        state = keep(state, sub)
         if test, do: send_to(sub, message(sub, "Weaver", "Notifications are on.", nil))
         {:reply, :ok, state}
 
@@ -211,8 +213,6 @@ defmodule Weaver.Push do
 
   # ── Storage ─────────────────────────────────────────────────────────────
 
-  defp path, do: Path.join(Weaver.Agent.Store.home(), "push.json")
-
   defp parse(
          %{
            "endpoint" => "https://" <> _ = endpoint,
@@ -231,40 +231,32 @@ defmodule Weaver.Push do
 
   defp parse(_subscription, _origin), do: :error
 
+  # The table is the truth; `subs` is this process's copy of the tenant's rows.
+  defp keep(state, sub) do
+    row = Map.merge(sub, %{tenant: state.tenant, inserted_at: DateTime.utc_now()})
+
+    Repo.insert_all("push_subscriptions", [row],
+      on_conflict: {:replace, [:p256dh, :auth, :origin]},
+      conflict_target: [:tenant, :endpoint]
+    )
+
+    put_in(state.subs[sub.endpoint], sub)
+  end
+
   defp drop(state, endpoint) do
-    if Map.has_key?(state.subs, endpoint),
-      do: save(%{state | subs: Map.delete(state.subs, endpoint)}),
-      else: state
+    Repo.delete_all(
+      from(s in "push_subscriptions", where: s.tenant == ^state.tenant and s.endpoint == ^endpoint)
+    )
+
+    %{state | subs: Map.delete(state.subs, endpoint)}
   end
 
   defp load(t) do
-    case Weaver.FS.read(t, path()) do
-      {:ok, body} ->
-        case Jason.decode(body) do
-          {:ok, %{"subscriptions" => subs}} when is_list(subs) ->
-            for sub <- subs, is_binary(sub["endpoint"]), into: %{} do
-              {sub["endpoint"],
-               Map.new(~w(endpoint p256dh auth origin created_at)a, &{&1, sub[to_string(&1)]})}
-            end
-
-          _ ->
-            %{}
-        end
-
-      {:error, :enoent} ->
-        %{}
-
-      # Not "none": saving over it would forget every subscription.
-      {:error, reason} ->
-        raise "Weaver.Push #{t} cannot read #{path()}: #{inspect(reason)}"
-    end
+    from(s in "push_subscriptions",
+      where: s.tenant == ^t,
+      select: %{endpoint: s.endpoint, p256dh: s.p256dh, auth: s.auth, origin: s.origin}
+    )
+    |> Repo.all()
+    |> Map.new(&{&1.endpoint, &1})
   end
-
-  defp save(state) do
-    body = %{subscriptions: state.subs |> Map.values() |> Enum.sort_by(& &1.created_at)}
-    Weaver.FS.write(state.tenant, path(), Jason.encode_to_iodata!(body, pretty: true))
-    state
-  end
-
-  defp now_iso, do: DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()
 end

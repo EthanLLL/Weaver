@@ -43,6 +43,11 @@ Restart=always
 WantedBy=multi-user.target
 U
 sudo ln -sf /etc/systemd/system/weaver-guest.service mnt/etc/systemd/system/multi-user.target.wants/weaver-guest.service
+# The VM has no DHCP, so nothing tells systemd-resolved where DNS is, and an
+# apt install can bring resolved in (Chrome's did) and point resolv.conf at
+# its stub: give it the same servers the static resolv.conf names.
+sudo install -d mnt/etc/systemd/resolved.conf.d
+printf '[Resolve]\nDNS=1.1.1.1 8.8.8.8\n' | sudo tee mnt/etc/systemd/resolved.conf.d/weaver.conf >/dev/null
 sudo umount mnt && rmdir mnt
 
 tap=fc$n

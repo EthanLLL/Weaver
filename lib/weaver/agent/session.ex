@@ -439,6 +439,7 @@ defmodule Weaver.Agent.Session do
         cond do
           String.trim(text) == "" and files == [] -> {:reply, {:error, :empty}, state}
           reload?(text) and files == [] -> reload(state, text, opts)
+          command?(text, "/cron") and files == [] -> list_cron(state, text, opts)
           true -> accept(state, text, files, opts)
         end
     end
@@ -596,6 +597,20 @@ defmodule Weaver.Agent.Session do
 
   # Loom's own command, never sent to a backend. Only the whole message counts,
   # so a sentence that mentions /reload is still a sentence.
+  # `/cron` lists the tenant's scheduled jobs, in whichever session it is
+  # typed. Jobs are made by an agent with `weaver cron.add`; see `Weaver.Cron`.
+  defp list_cron(state, text, opts) do
+    jobs =
+      try do
+        Weaver.Cron.list(state.tenant)
+      catch
+        :exit, _ -> []
+      end
+
+    state = state |> echo(text, opts) |> emit(:cron_jobs, %{jobs: jobs})
+    {:reply, {:ok, :listed}, state}
+  end
+
   defp reload?(text), do: command?(text, "/reload")
 
   defp command?(text, command), do: String.trim(text) == command

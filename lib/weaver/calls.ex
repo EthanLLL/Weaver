@@ -80,6 +80,23 @@ defmodule Weaver.Calls do
     with :ok <- agent(t, :delete_session, [id]), do: {:ok, %{}}
   end
 
+  # Scheduled prompts, for the `cron` skill.
+  defp call(t, "cron.list", _args), do: {:ok, Weaver.Cron.list(t)}
+
+  defp call(t, "cron.add", args) when is_map(args) do
+    case Weaver.Cron.add(t, Map.take(args, ~w(name cron target prompt))) do
+      {:ok, job} -> {:ok, job}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp call(t, "cron.delete", %{"id" => id}) when is_binary(id) do
+    case Weaver.Cron.delete(t, id) do
+      :ok -> {:ok, %{}}
+      {:error, :not_found} -> {:error, "no job #{inspect(id)}"}
+    end
+  end
+
   defp call(_tenant, method, _args), do: {:error, "no such method or bad arguments: #{method}"}
 
   defp backend(nil), do: {:ok, :claude_code}
@@ -119,6 +136,8 @@ defmodule Weaver.Calls do
 
     case :gen_tcp.listen(0, [:binary, ifaddr: {:local, path}, packet: 4, active: false]) do
       {:ok, lsock} ->
+        # Its scheduled prompts are timed here from now on.
+        Weaver.Cron.changed(vm)
         Map.put(state, vm, spawn_link(fn -> accept(lsock, vm) end))
 
       {:error, reason} ->

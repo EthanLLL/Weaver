@@ -10,10 +10,15 @@ defmodule Weaver.Application do
       # This node's own names: tenants, their sessions and terminals.
       {Registry, keys: :unique, name: Weaver.Local},
       {Phoenix.PubSub, name: Weaver.PubSub},
+      # The platform's data, migrated before anything uses it.
+      Weaver.Repo,
+      {Ecto.Migrator, repos: [Weaver.Repo]},
       {DynamicSupervisor, name: Weaver.Execs, strategy: :one_for_one},
       # One `Weaver.Tenant.Tree` per tenant whose VM is here and who is in use.
       {DynamicSupervisor, name: Weaver.Tenants, strategy: :one_for_one},
       Weaver.Calls,
+      # Scheduled prompts for the tenants whose VMs are here.
+      Weaver.Cron,
       Weaver.Peers,
       WeaverWeb.Endpoint
     ]

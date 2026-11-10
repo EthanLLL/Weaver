@@ -18,7 +18,7 @@ defmodule WeaverWeb.NodeInstallController do
   @targets ~w(darwin-arm64 darwin-amd64 linux-arm64 linux-amd64)
 
   def script(conn, %{"code" => code}) do
-    case WeaverWeb.At.at(conn, Weaver.Nodes, :redeem, [code]) do
+    case Weaver.Nodes.redeem(conn.assigns.tenant, code) do
       {:ok, node, token} ->
         conn
         |> put_resp_content_type("text/x-shellscript")

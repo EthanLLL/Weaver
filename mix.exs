@@ -16,6 +16,12 @@ defmodule Weaver.MixProject do
   end
 
   defp deps do
-    [{:phoenix, "~> 1.8"}, {:bandit, "~> 1.13"}, {:jason, "~> 1.4"}]
+    [
+      {:phoenix, "~> 1.8"},
+      {:bandit, "~> 1.13"},
+      {:jason, "~> 1.4"},
+      {:ecto_sql, "~> 3.13"},
+      {:postgrex, "~> 0.21"}
+    ]
   end
 end

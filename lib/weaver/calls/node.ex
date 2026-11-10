@@ -35,14 +35,8 @@ defmodule Weaver.Calls.Node do
   @retry_hint "run `weaver node list` to see whether it is back online, then retry"
 
   def serve(sock, t, "node.list", _args) do
-    case Weaver.Tenant.at(t, Nodes, :list, [t]) do
-      nodes when is_list(nodes) ->
-        :gen_tcp.send(sock, [?o, JSON.encode!(nodes)])
-        :gen_tcp.send(sock, <<?q, 0::32>>)
-
-      error ->
-        fail(sock, inspect(error))
-    end
+    :gen_tcp.send(sock, [?o, JSON.encode!(Nodes.list(t))])
+    :gen_tcp.send(sock, <<?q, 0::32>>)
   end
 
   def serve(sock, t, "node.exec", %{"node" => name, "cmd" => cmd} = args) when is_binary(cmd) do
@@ -230,7 +224,7 @@ defmodule Weaver.Calls.Node do
   # ── Lookup ──────────────────────────────────────────────────────────────
 
   defp with_node(sock, t, name, fun) when is_binary(name) do
-    case Weaver.Tenant.at(t, Nodes, :await, [t, name, @await_ms]) do
+    case Nodes.await(t, name, @await_ms) do
       {:ok, pid} ->
         fun.(pid)
 
@@ -239,7 +233,7 @@ defmodule Weaver.Calls.Node do
         fail(sock, "#{node.name} is offline (#{seen}); #{@retry_hint}")
 
       :unknown ->
-        names = Weaver.Tenant.at(t, Nodes, :list, [t]) |> Enum.map_join(", ", & &1.name)
+        names = Nodes.list(t) |> Enum.map_join(", ", & &1.name)
 
         known =
           if names == "",
@@ -247,9 +241,6 @@ defmodule Weaver.Calls.Node do
             else: "devices: #{names}"
 
         fail(sock, "no device called #{name}; #{known}")
-
-      error ->
-        fail(sock, inspect(error))
     end
   end
 

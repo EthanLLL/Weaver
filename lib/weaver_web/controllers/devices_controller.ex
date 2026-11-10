@@ -8,35 +8,33 @@ defmodule WeaverWeb.DevicesController do
   """
   use WeaverWeb, :controller
 
-  import WeaverWeb.At, only: [at: 4]
-
   alias Weaver.Nodes
 
-  def index(conn, _params), do: json(conn, %{nodes: at(conn, Nodes, :list, [])})
+  def index(conn, _params), do: json(conn, %{nodes: Nodes.list(conn.assigns.tenant)})
 
   def create(conn, params) do
-    case at(conn, Nodes, :create, [params["name"]]) do
+    case Nodes.create(conn.assigns.tenant, params["name"]) do
       {:ok, node, code} -> conn |> put_status(201) |> json(%{node: node, code: code})
       {:error, reason} -> refuse(conn, reason)
     end
   end
 
   def update(conn, %{"id" => id} = params) do
-    case at(conn, Nodes, :rename, [id, params["name"]]) do
+    case Nodes.rename(conn.assigns.tenant, id, params["name"]) do
       {:ok, node} -> json(conn, %{node: node})
       {:error, reason} -> refuse(conn, reason)
     end
   end
 
   def delete(conn, %{"id" => id}) do
-    case at(conn, Nodes, :delete, [id]) do
+    case Nodes.delete(conn.assigns.tenant, id) do
       :ok -> send_resp(conn, 204, "")
       {:error, reason} -> refuse(conn, reason)
     end
   end
 
   def install(conn, %{"id" => id}) do
-    case at(conn, Nodes, :install_code, [id]) do
+    case Nodes.install_code(conn.assigns.tenant, id) do
       {:ok, code} -> json(conn, %{code: code})
       {:error, reason} -> refuse(conn, reason)
     end
@@ -47,5 +45,5 @@ defmodule WeaverWeb.DevicesController do
   defp refuse(conn, reason) when is_binary(reason),
     do: conn |> put_status(422) |> json(%{error: reason})
 
-  defp refuse(conn, reason), do: conn |> put_status(503) |> json(%{error: inspect(reason)})
+  
 end
