@@ -12,45 +12,81 @@
   header b { color: #e6edf3; }
   #status { color: #8b949e; }
   #term { flex: 1; min-height: 0; padding: 4px 0 0 8px; }
+  #login { margin: auto; display: flex; gap: 8px; }
+  #login input, #login button { font: inherit; padding: 6px 10px; background: #161b22; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px; }
+  [hidden] { display: none !important; }
 </style>
 </head>
 <body>
 <header><b>{{tenant}}</b><span id="status">connecting…</span></header>
-<div id="term"></div>
+<form id="login" hidden><input type="password" id="password" placeholder="password" autocomplete="current-password"><button>Log in</button></form>
+<div id="term" hidden></div>
 <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/phoenix@1.8.1/priv/static/phoenix.min.js"></script>
 <script>
   const status = document.getElementById("status")
-  const term = new Terminal({ cursorBlink: true, fontSize: 13, theme: { background: "#0d1117" } })
-  const fit = new FitAddon.FitAddon()
-  term.loadAddon(fit)
-  term.open(document.getElementById("term"))
-  fit.fit()
+  const login = document.getElementById("login")
+  const termEl = document.getElementById("term")
+  const KEY = "weaver-token"
 
-  const socket = new Phoenix.Socket("/socket")
-  socket.connect()
-  let channel
-
-  function open() {
-    term.reset()
-    channel = socket.channel("terminal", { rows: term.rows, cols: term.cols })
-    channel.on("o", (buf) => term.write(new Uint8Array(buf)))
-    channel.on("exit", ({ status: s }) => {
-      status.textContent = `shell exited (${s}) — press any key for a new one`
-      channel.leave(); channel = null
-    })
-    channel.join()
-      .receive("ok", ({ node }) => { status.textContent = `shell on ${node}` })
-      .receive("error", ({ reason }) => { status.textContent = `cannot open a shell: ${reason}` })
+  async function main() {
+    const token = localStorage.getItem(KEY)
+    const ok = token && (await fetch("/me", { headers: { authorization: `Bearer ${token}` } })).status === 204
+    ok ? terminal(token) : ask()
   }
 
-  term.onData((data) => channel ? channel.push("i", { data }) : open())
-  term.onResize(({ rows, cols }) => channel && channel.push("z", { rows, cols }))
-  new ResizeObserver(() => fit.fit()).observe(document.getElementById("term"))
-  socket.onError(() => { status.textContent = "disconnected, retrying…" })
-  open()
-  term.focus()
+  function ask(message) {
+    localStorage.removeItem(KEY)
+    status.textContent = message || "log in"
+    login.hidden = false
+    document.getElementById("password").focus()
+  }
+
+  login.addEventListener("submit", async (e) => {
+    e.preventDefault()
+    const password = document.getElementById("password").value
+    const res = await fetch("/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password }) })
+    if (res.status !== 200) return ask("wrong password")
+    localStorage.setItem(KEY, (await res.json()).token)
+    login.hidden = true
+    main()
+  })
+
+  function terminal(token) {
+    termEl.hidden = false
+    const term = new Terminal({ cursorBlink: true, fontSize: 13, theme: { background: "#0d1117" } })
+    const fit = new FitAddon.FitAddon()
+    term.loadAddon(fit)
+    term.open(termEl)
+    fit.fit()
+
+    const socket = new Phoenix.Socket("/socket", { params: { token } })
+    socket.connect()
+    let channel
+
+    function open() {
+      term.reset()
+      channel = socket.channel("terminal", { rows: term.rows, cols: term.cols })
+      channel.on("o", (buf) => term.write(new Uint8Array(buf)))
+      channel.on("exit", ({ status: s }) => {
+        status.textContent = `shell exited (${s}) — press any key for a new one`
+        channel.leave(); channel = null
+      })
+      channel.join()
+        .receive("ok", ({ node }) => { status.textContent = `shell on ${node}` })
+        .receive("error", ({ reason }) => { status.textContent = `cannot open a shell: ${reason}` })
+    }
+
+    term.onData((data) => channel ? channel.push("i", { data }) : open())
+    term.onResize(({ rows, cols }) => channel && channel.push("z", { rows, cols }))
+    new ResizeObserver(() => fit.fit()).observe(termEl)
+    socket.onError(() => { status.textContent = "disconnected, retrying…" })
+    open()
+    term.focus()
+  }
+
+  main()
 </script>
 </body>
 </html>

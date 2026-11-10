@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -34,7 +33,7 @@ type execRequest struct {
 
 func execute(c *conn, body []byte) {
 	var req execRequest
-	if json.Unmarshal(body, &req) != nil || len(req.Argv) == 0 {
+	if decode(body, &req) != nil || len(req.Argv) == 0 {
 		c.fail("bad exec request")
 		return
 	}

@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"io"
 	"net"
@@ -67,4 +69,13 @@ func (c *conn) copyOut(typ byte, r io.Reader) error {
 			return err
 		}
 	}
+}
+
+// decode reads a request strictly: a field this guest does not know fails it,
+// so a host newer than its guest is refused rather than half obeyed (an
+// older guest once ran as root a process the host asked to run as a user).
+func decode(body []byte, v any) error {
+	d := json.NewDecoder(bytes.NewReader(body))
+	d.DisallowUnknownFields()
+	return d.Decode(v)
 }

@@ -35,7 +35,7 @@ func describe(fi os.FileInfo) entry {
 
 func file(c *conn, body []byte) {
 	var req fileRequest
-	if json.Unmarshal(body, &req) != nil || !filepath.IsAbs(req.Path) {
+	if decode(body, &req) != nil || !filepath.IsAbs(req.Path) {
 		c.fail("bad file request")
 		return
 	}

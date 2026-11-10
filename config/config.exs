@@ -7,8 +7,7 @@ config :weaver, WeaverWeb.Endpoint,
   http: [ip: {127, 0, 0, 1}, port: 4000],
   server: true,
   pubsub_server: Weaver.PubSub,
-  check_origin: ["//*.luozhen.cloud"],
-  secret_key_base: :crypto.strong_rand_bytes(48) |> Base.encode64()
+  check_origin: ["//*.luozhen.cloud"]
 
 config :weaver, domain: "luozhen.cloud"
 
