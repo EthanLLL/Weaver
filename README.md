@@ -37,3 +37,11 @@ tenant, so nothing in a VM holds a Weaver credential.
 
 Weaver provides no LLM. A tenant's cc or codex logs in however the tenant
 likes — an API key, Bedrock, the official login — and that stays in their VM.
+Weaver never issues, stores or relays a tenant's credentials; the tenant sets
+them up from a terminal in the VM.
+
+For AWS, the way that holds no long-lived secret anywhere is IAM Roles
+Anywhere: the tenant generates a key inside the VM, only its CSR leaves, their
+own CA signs it, and `credential_process = aws_signing_helper
+credential-process ...` in `~/.aws/config` turns the certificate into
+hour-long role credentials for every SDK in the VM.
