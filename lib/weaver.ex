@@ -34,6 +34,12 @@ defmodule Weaver do
     with {:ok, node} <- where(tenant), do: :erpc.call(node, Weaver.Host, fun, [tenant], 60_000)
   end
 
+  @doc "A file operation in a tenant's VM (see `Weaver.Guest.file/4`)."
+  def file(tenant, op, path, data \\ nil) do
+    with {:ok, node} <- where(tenant),
+         do: :erpc.call(node, Weaver.Guest, :file, [tenant, op, path, data], 60_000)
+  end
+
   @doc """
   Run a shell command in a tenant's VM, wherever it is, and wait for it:
   `{:ok, %{stdout, stderr, status}}`.

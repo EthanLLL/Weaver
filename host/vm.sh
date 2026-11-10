@@ -4,6 +4,7 @@
 # Control channel: weaver-guest on vsock port 1024, host side /opt/weaver/vms/<name>/vsock.sock.
 set -euo pipefail
 name=$1 n=$2 dir=/opt/weaver/vms/$1
+if systemctl is-active -q weaver-vm@$name; then echo "$name is running" >&2; exit 1; fi
 mkdir -p $dir && cd $dir && echo $n > net
 
 if [ ! -f rootfs.ext4 ]; then
@@ -11,8 +12,16 @@ if [ ! -f rootfs.ext4 ]; then
   rm -rf root && sudo unsquashfs -q -d root /opt/weaver/ubuntu.squashfs
   echo $name | sudo tee root/etc/hostname >/dev/null
   printf 'nameserver 1.1.1.1\n' | sudo tee root/etc/resolv.conf >/dev/null
-  sudo install -m 755 /opt/weaver/weaver-guest root/usr/local/bin/weaver-guest
-  sudo tee root/etc/systemd/system/weaver-guest.service >/dev/null <<U
+  truncate -s 4G rootfs.ext4 && sudo mkfs.ext4 -q -d root -F rootfs.ext4 && sudo rm -rf root
+  sudo chown ubuntu: rootfs.ext4
+fi
+
+# The guest daemon is the platform's, not the tenant's: every boot puts in
+# the host's current one.
+mkdir -p mnt && sudo mount -o loop rootfs.ext4 mnt
+sudo install -m 755 /opt/weaver/weaver-guest mnt/usr/local/bin/weaver-guest
+sudo ln -sf weaver-guest mnt/usr/local/bin/weaver
+sudo tee mnt/etc/systemd/system/weaver-guest.service >/dev/null <<U
 [Unit]
 Description=Weaver guest daemon (vsock port 1024)
 [Service]
@@ -21,10 +30,8 @@ Restart=always
 [Install]
 WantedBy=multi-user.target
 U
-  sudo ln -sf /etc/systemd/system/weaver-guest.service root/etc/systemd/system/multi-user.target.wants/weaver-guest.service
-  truncate -s 4G rootfs.ext4 && sudo mkfs.ext4 -q -d root -F rootfs.ext4 && sudo rm -rf root
-  sudo chown ubuntu: rootfs.ext4
-fi
+sudo ln -sf /etc/systemd/system/weaver-guest.service mnt/etc/systemd/system/multi-user.target.wants/weaver-guest.service
+sudo umount mnt && rmdir mnt
 
 tap=fc$n
 ip link show $tap >/dev/null 2>&1 || {

@@ -10,11 +10,10 @@ defmodule Weaver.Exec do
   The owner may be on another node; that is the point. If the owner dies the
   connection closes, and the guest kills the process.
 
-  Wire format: see `guest/main.go`.
+  Options: `cwd`, `env` (`["K=V"]`), and `pty: {rows, cols}` for a terminal,
+  whose output all comes as `:stdout`.
   """
   use GenServer, restart: :temporary
-
-  @port 1024
 
   @doc "Run `argv` in `vm` on this host, for `owner`."
   def start(vm, argv, owner \\ self(), opts \\ []) do
@@ -24,25 +23,29 @@ defmodule Weaver.Exec do
   def write(pid, data), do: GenServer.cast(pid, {:frame, ?i, data})
   def close(pid), do: GenServer.cast(pid, {:frame, ?e, ""})
   def signal(pid, n), do: GenServer.cast(pid, {:frame, ?k, <<n>>})
+  def resize(pid, rows, cols), do: GenServer.cast(pid, {:frame, ?z, <<rows::16, cols::16>>})
 
   def start_link(arg), do: GenServer.start_link(__MODULE__, arg)
 
   @impl true
   def init({vm, argv, owner, opts}) do
     Process.monitor(owner)
-    path = Path.join([Weaver.Host.dir(), vm, "vsock.sock"])
-    request = JSON.encode!(%{argv: argv, cwd: opts[:cwd] || "", env: opts[:env] || []})
 
-    with {:ok, sock} <-
-           :gen_tcp.connect({:local, path}, 0, [:binary, active: false, packet: :line]),
-         :ok <- :gen_tcp.send(sock, "CONNECT #{@port}\n"),
-         {:ok, "OK " <> _} <- :gen_tcp.recv(sock, 0, 5000),
-         :ok <- :inet.setopts(sock, packet: 4, active: true),
-         :ok <- :gen_tcp.send(sock, [?x, request]) do
+    request =
+      %{argv: argv, cwd: opts[:cwd] || "", env: opts[:env] || []}
+      |> then(fn r ->
+        case opts[:pty] do
+          {rows, cols} -> Map.put(r, :pty, %{rows: rows, cols: cols})
+          nil -> r
+        end
+      end)
+
+    with {:ok, sock} <- Weaver.Guest.connect(vm),
+         :ok <- :gen_tcp.send(sock, [?x, JSON.encode!(request)]),
+         :ok <- :inet.setopts(sock, active: true) do
       {:ok, %{sock: sock, owner: owner}}
     else
       {:error, reason} -> {:stop, reason}
-      other -> {:stop, {:handshake, other}}
     end
   end
 

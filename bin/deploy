@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # deploy — ship this checkout's control plane to both hosts and (re)start weaver.service there.
+# The guest daemon goes along; a VM picks it up the next time it boots.
 set -e
 cd "$(dirname "$0")/.."
 hosts=(1 2)
@@ -12,6 +13,7 @@ done
 peers=$(for h in "${hosts[@]}"; do printf 'weaver@%s,' "${ip[$h]}"; done); peers=${peers%,}
 [ -f .cookie ] || (umask 077; head -c 24 /dev/urandom | base64 | tr -d '/+=' > .cookie)
 tar czf /tmp/weaver-app.tgz mix.exs lib host
+(cd guest && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags='-s -w' -o weaver-guest .)
 
 for h in "${hosts[@]}"; do
   cat > /tmp/weaver.service <<U
@@ -29,6 +31,7 @@ WantedBy=multi-user.target
 U
   bin/put $h /tmp/weaver-app.tgz /opt/weaver/app.tgz >/dev/null
   bin/put $h /tmp/weaver.service /opt/weaver/weaver.service >/dev/null
+  bin/put $h guest/weaver-guest /opt/weaver/weaver-guest >/dev/null
   bin/put $h .cookie /home/ubuntu/.erlang.cookie.new >/dev/null
   bin/w $h 'set -e
 install -m 400 ~/.erlang.cookie.new ~/.erlang.cookie && rm ~/.erlang.cookie.new

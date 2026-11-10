@@ -23,7 +23,8 @@ defmodule Weaver.Host do
 
   @doc "Boot a VM that exists here, on the network it was made with."
   def start(name) do
-    with {:ok, n} <- File.read(Path.join([@dir, name, "net"])) do
+    with {:ok, n} <- File.read(Path.join([@dir, name, "net"])),
+         :ok <- Weaver.Calls.ensure(name) do
       run(["bash", "/opt/weaver/vm.sh", name, String.trim(n)])
     end
   end

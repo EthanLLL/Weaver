@@ -6,6 +6,7 @@ defmodule Weaver.Application do
   def start(_type, _args) do
     children = [
       {DynamicSupervisor, name: Weaver.Execs, strategy: :one_for_one},
+      Weaver.Calls,
       Weaver.Peers
     ]
 
