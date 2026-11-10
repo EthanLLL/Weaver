@@ -10,7 +10,7 @@ defmodule Weaver.Exec do
   The owner may be on another node; that is the point. If the owner dies the
   connection closes, and the guest kills the process.
 
-  Options: `cwd`, `env` (`["K=V"]`), and `pty: {rows, cols}` for a terminal,
+  Options: `user` (else root), `cwd` (else their home), `env` (`["K=V"]`), and `pty: {rows, cols}` for a terminal,
   whose output all comes as `:stdout`.
   """
   use GenServer, restart: :temporary
@@ -32,7 +32,7 @@ defmodule Weaver.Exec do
     Process.monitor(owner)
 
     request =
-      %{argv: argv, cwd: opts[:cwd] || "", env: opts[:env] || []}
+      %{argv: argv, user: opts[:user] || "", cwd: opts[:cwd] || "", env: opts[:env] || []}
       |> then(fn r ->
         case opts[:pty] do
           {rows, cols} -> Map.put(r, :pty, %{rows: rows, cols: cols})

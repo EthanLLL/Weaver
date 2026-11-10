@@ -18,7 +18,8 @@ Status: experiment.
 - `lib/` — the Elixir node every host runs. `Weaver` is the cluster-wide API
   (`tenants/0`, `start/1`, `stop/1`, `run/2`, `file/4`); `Weaver.Exec` is a
   process in a VM, with or without a terminal, held like a port from any node;
-  `Weaver.Guest` does file operations; `Weaver.Calls` answers programs in a VM
+  `Weaver.Guest` does file operations; `Weaver.Session` is a Claude Code
+  conversation in a VM (stream-json), resumable from any node; `Weaver.Calls` answers programs in a VM
   calling Weaver; `Weaver.Host` is this host's VMs.
 - `guest/` — `weaver-guest`, the only thing Weaver puts in a VM, reinstalled
   on every boot: processes (pipes or a pty), files, and the `weaver` command

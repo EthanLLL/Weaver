@@ -7,18 +7,23 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/user"
+	"strconv"
 	"sync"
 	"syscall"
 
 	"github.com/creack/pty"
 )
 
-// An 'x' request: {"argv": [...], "cwd": "...", "env": ["K=V"], "pty": {"rows": r, "cols": c}}.
+// An 'x' request: {"argv": [...], "user": "...", "cwd": "...", "env": ["K=V"], "pty": {"rows": r, "cols": c}}.
+// With "user" the process runs as that user, with their HOME, and in it
+// unless "cwd" says otherwise; without, as root.
 // With "pty" the process gets a terminal; its output, stdout and stderr
 // alike, comes back as 'o', and 'z' resizes it. Closing the connection kills
 // the process group.
 type execRequest struct {
 	Argv []string `json:"argv"`
+	User string   `json:"user"`
 	Cwd  string   `json:"cwd"`
 	Env  []string `json:"env"`
 	Pty  *struct {
@@ -35,7 +40,23 @@ func execute(c *conn, body []byte) {
 	}
 	cmd := exec.Command(req.Argv[0], req.Argv[1:]...)
 	cmd.Dir = req.Cwd
-	cmd.Env = append(os.Environ(), req.Env...)
+	cmd.Env = os.Environ()
+	cmd.SysProcAttr = &syscall.SysProcAttr{}
+	if req.User != "" {
+		u, err := user.Lookup(req.User)
+		if err != nil {
+			c.fail(err.Error())
+			return
+		}
+		uid, _ := strconv.Atoi(u.Uid)
+		gid, _ := strconv.Atoi(u.Gid)
+		cmd.SysProcAttr.Credential = &syscall.Credential{Uid: uint32(uid), Gid: uint32(gid)}
+		cmd.Env = append(cmd.Env, "HOME="+u.HomeDir, "USER="+u.Username, "LOGNAME="+u.Username)
+		if cmd.Dir == "" {
+			cmd.Dir = u.HomeDir
+		}
+	}
+	cmd.Env = append(cmd.Env, req.Env...)
 
 	var (
 		stdin  io.WriteCloser
@@ -58,7 +79,7 @@ func execute(c *conn, body []byte) {
 		// Reading a terminal whose process has gone ends in EIO, not EOF.
 		go func() { defer out.Done(); c.copyOut('o', tty) }()
 	} else {
-		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+		cmd.SysProcAttr.Setpgid = true
 		in, _ := cmd.StdinPipe()
 		stdout, _ := cmd.StdoutPipe()
 		stderr, _ := cmd.StderrPipe()
