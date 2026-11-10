@@ -32,6 +32,13 @@ defmodule Weaver.Tenant do
   topic; the order the user dragged the directories into
   (`~/.loom/directories.json` in the VM); and the terminal layout, in memory,
   like the terminals themselves.
+
+  ## What it puts in the VM
+
+  Weaver's skills (`priv/skills`), into the tenant's `~/.claude/skills/` and
+  `~/.codex/skills/`, every time it starts: they describe the platform, so
+  they follow the platform's version. A file that is already the same is
+  left alone.
   """
   use GenServer
 
@@ -139,7 +146,13 @@ defmodule Weaver.Tenant do
       idle: nil
     }
 
-    {:ok, check_idle(state)}
+    {:ok, check_idle(state), {:continue, :skills}}
+  end
+
+  @impl true
+  def handle_continue(:skills, state) do
+    install_skills(state.tenant)
+    {:noreply, state}
   end
 
   @impl true
@@ -243,6 +256,27 @@ defmodule Weaver.Tenant do
   defp cancel_idle(state) do
     Process.cancel_timer(state.idle)
     %{state | idle: nil}
+  end
+
+  # ── Skills ────────────────────────────────────────────────────────────────
+
+  defp install_skills(t) do
+    source = Application.app_dir(:weaver, "priv/skills")
+
+    for file <- Path.wildcard(Path.join(source, "**/*")),
+        File.regular?(file),
+        data = File.read!(file),
+        rel = Path.relative_to(file, source),
+        target <- [
+          Path.join([Weaver.FS.home(), ".claude/skills", rel]),
+          Path.join([Weaver.FS.home(), ".codex/skills", rel])
+        ],
+        Weaver.FS.read(t, target) != {:ok, data} do
+      Weaver.FS.write(t, target, data)
+    end
+  rescue
+    # A VM that is not running gets them the next time.
+    error -> Logger.warning("Weaver.Tenant #{t} could not install skills: #{inspect(error)}")
   end
 
   # ── Directory order ───────────────────────────────────────────────────────

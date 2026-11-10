@@ -12,7 +12,7 @@ defmodule Weaver.Agent do
   alias Weaver.Agent.{Directory, Session, Store}
   alias Weaver.Tenant
 
-  @doc "Start a new session `id`. `:backend` is required (`:claude_code`)."
+  @doc "Start a new session `id`. `:backend` is required: `:claude_code` or `:codex`."
   def start_session(t, id, opts \\ []) do
     spec = {Session, [tenant: t, id: id] ++ opts}
 
@@ -44,11 +44,12 @@ defmodule Weaver.Agent do
 
   def exists?(t, id), do: match?({:ok, _}, ensure(t, id))
 
-  @doc "A fresh session titled `title`, with `prompt` submitted; `{:ok, id}`."
+  @doc "A fresh session titled `title`, with `prompt` submitted; `{:ok, id}`. `:backend` defaults to `:claude_code`."
   def new_session(t, title, prompt, opts \\ []) do
     id = new_id()
+    backend = Keyword.get(opts, :backend, :claude_code)
 
-    with {:ok, _} <- start_session(t, id, backend: :claude_code, title: title),
+    with {:ok, _} <- start_session(t, id, backend: backend, title: title),
          {:ok, _} <- Session.submit(t, id, prompt, Keyword.take(opts, [:origin])) do
       {:ok, id}
     end
@@ -97,6 +98,7 @@ defmodule Weaver.Agent do
         is_pid(pid),
         do: send(pid, :reload_backend)
 
+    Weaver.Agent.Codex.Server.reload(t)
     :ok
   end
 

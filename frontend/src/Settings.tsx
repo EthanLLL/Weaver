@@ -88,7 +88,7 @@ const PUSH_HINT: Record<Push["state"], string> = {
   on: "This device is notified when a turn ends. Click to stop.",
   off: "Get a notification on this device when a turn ends",
   denied: "Notifications are blocked for this site in the browser's settings",
-  unsupported: "On an iPhone, add Loom to the Home Screen and open it from there to get notifications",
+  unsupported: "On an iPhone, add Weaver to the Home Screen and open it from there to get notifications",
 }
 
 /** Notifications for this device, on or off; see `usePush`. */

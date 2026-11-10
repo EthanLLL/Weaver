@@ -180,7 +180,7 @@ export function Sidebar({
   return (
     <aside className="sidebar">
       <div className="sidebar-head">
-        <span className="brand">Loom</span>
+        <span className="brand">Weaver</span>
         <span className="sidebar-actions">
           <button className="icon-btn" onClick={onSearch} title={vim?.on ? "Search (␣␣)" : "Search"}>
             <Search />

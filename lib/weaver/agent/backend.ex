@@ -1,7 +1,7 @@
 defmodule Weaver.Agent.Backend do
   @moduledoc """
-  The agent engine behind one session. Ported from Loom, where it is Claude
-  Code or Codex; Weaver has Claude Code so far, run in the tenant's VM.
+  The agent engine behind one session: Claude Code or Codex, ported from
+  Loom, both run in the tenant's VM as the tenant's own CLI.
 
   Loom does not run an agent loop of its own. A session binds to one backend
   conversation for life and this module is the only thing that knows how to talk
@@ -72,7 +72,7 @@ defmodule Weaver.Agent.Backend do
   """
 
   @typedoc "Which engine a session is bound to. Chosen at creation, never changed."
-  @type kind :: :claude_code
+  @type kind :: :claude_code | :codex
 
   @typedoc """
   Backend-private state. Holds whatever identifies the live conversation and any
@@ -219,6 +219,7 @@ defmodule Weaver.Agent.Backend do
   """
   @spec impl(kind) :: module()
   def impl(:claude_code), do: Weaver.Agent.Backend.ClaudeCode
+  def impl(:codex), do: Weaver.Agent.Backend.Codex
 
   @doc """
   Parse a persisted or user-supplied backend name.
@@ -228,13 +229,15 @@ defmodule Weaver.Agent.Backend do
   lives in that engine's own store, so there is nothing to migrate).
   """
   @spec parse(term()) :: {:ok, kind} | :error
-  def parse(:claude_code), do: {:ok, :claude_code}
+  def parse(kind) when kind in [:claude_code, :codex], do: {:ok, kind}
   def parse("claude_code"), do: {:ok, :claude_code}
+  def parse("codex"), do: {:ok, :codex}
   def parse(_other), do: :error
 
   @doc "Human-facing label for the session list."
   @spec label(kind) :: String.t()
   def label(:claude_code), do: "Claude Code"
+  def label(:codex), do: "Codex"
 
   @doc """
   Read one field out of a persisted header, by atom or string key.

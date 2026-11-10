@@ -11,7 +11,7 @@ defmodule WeaverWeb.AgentSessionController do
     json(conn, %{sessions: Enum.map(at(conn, Agent, :list_sessions, []), &view/1)})
   end
 
-  # POST /api/agents — `backend` is required; Weaver has `claude_code`.
+  # POST /api/agents — `backend` is required: `claude_code` or `codex`.
   def create(conn, params) do
     case Agent.Backend.parse(params["backend"]) do
       {:ok, backend} ->
@@ -28,7 +28,10 @@ defmodule WeaverWeb.AgentSessionController do
       :error ->
         conn
         |> put_status(:unprocessable_entity)
-        |> json(%{error: "`backend` must be \"claude_code\"", given: params["backend"]})
+        |> json(%{
+          error: "`backend` must be \"claude_code\" or \"codex\"",
+          given: params["backend"]
+        })
     end
   end
 

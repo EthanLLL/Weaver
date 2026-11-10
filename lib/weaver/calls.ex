@@ -20,10 +20,82 @@ defmodule Weaver.Calls do
   @doc "Listen for `vm`'s calls, if not already."
   def ensure(vm), do: GenServer.call(__MODULE__, {:ensure, vm})
 
-  # The methods. `tenant` is the VM the call came from.
+  # The methods: what a program in the VM may ask of Weaver, and nothing more.
+  # `tenant` is the VM the call came from; a method sees only that tenant.
   defp call(tenant, "whoami", _args), do: {:ok, %{tenant: tenant, host: node()}}
   defp call(_tenant, "echo", args), do: {:ok, args}
-  defp call(_tenant, method, _args), do: {:error, "no such method: #{method}"}
+
+  # Sessions, for the `sessions` skill: work started in parallel, watched in
+  # the sidebar.
+  defp call(t, "sessions.list", _args) do
+    {:ok,
+     for(
+       s <- Weaver.Tenant.sessions(t),
+       do: Map.take(s, [:id, :title, :directory, :status, :backend, :last_active_at])
+     )}
+  end
+
+  defp call(t, "sessions.new", %{"title" => title, "prompt" => prompt} = args)
+       when is_binary(title) and is_binary(prompt) do
+    with {:ok, backend} <- backend(args["backend"]),
+         {:ok, id} <-
+           agent(t, :new_session, [title, prompt, [backend: backend, origin: "weaver"]]) do
+      {:ok, %{id: id}}
+    end
+  end
+
+  defp call(_t, "sessions.new", _args),
+    do: {:error, ~s(want {"title": "…", "prompt": "…", "backend"?: "claude_code" | "codex"})}
+
+  defp call(t, "sessions.submit", %{"id" => id, "text" => text})
+       when is_binary(id) and is_binary(text) do
+    with {:ok, disposition} <- agent(t, :submit, [id, text, [origin: "weaver"]]),
+         do: {:ok, %{status: disposition}}
+  end
+
+  defp call(t, "sessions.status", %{"id" => id}) when is_binary(id) do
+    with %{} = info <- agent(t, :info, [id]),
+         do: {:ok, Map.take(info, [:id, :title, :status, :queued, :turns])}
+  end
+
+  # The newest reply, and whether the turn that wrote it is over.
+  defp call(t, "sessions.reply", %{"id" => id}) when is_binary(id) do
+    with {:ok, %{meta: meta, events: events}} <- agent(t, :attach, [id, 0, nil]) do
+      text =
+        events
+        |> Enum.filter(&(&1.kind == :assistant_text))
+        |> List.last()
+        |> then(&(&1 && &1.payload.text))
+
+      {:ok, %{status: meta.status, reply: text}}
+    end
+  end
+
+  defp call(t, "sessions.interrupt", %{"id" => id}) when is_binary(id) do
+    with :ok <- agent(t, :interrupt, [id]), do: {:ok, %{}}
+  end
+
+  defp call(t, "sessions.delete", %{"id" => id}) when is_binary(id) do
+    with :ok <- agent(t, :delete_session, [id]), do: {:ok, %{}}
+  end
+
+  defp call(_tenant, method, _args), do: {:error, "no such method or bad arguments: #{method}"}
+
+  defp backend(nil), do: {:ok, :claude_code}
+
+  defp backend(name) do
+    case Weaver.Agent.Backend.parse(name) do
+      {:ok, backend} -> {:ok, backend}
+      :error -> {:error, "backend is claude_code or codex"}
+    end
+  end
+
+  defp agent(t, fun, args) do
+    case Weaver.Tenant.at(t, Weaver.Agent, fun, [t | args]) do
+      {:error, reason} -> {:error, if(is_binary(reason), do: reason, else: inspect(reason))}
+      other -> other
+    end
+  end
 
   @impl true
   def init(nil) do

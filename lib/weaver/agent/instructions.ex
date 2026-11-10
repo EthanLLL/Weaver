@@ -10,7 +10,7 @@ defmodule Weaver.Agent.Instructions do
   alias Weaver.Agent.Store
 
   @doc "The text for session `id`, whose backend is `backend`."
-  def for_session(id, :claude_code) do
+  def for_session(id, backend) when backend in [:claude_code, :codex] do
     dir = Store.session_dir(id)
     output = Store.output_dir(id)
 
@@ -19,9 +19,8 @@ defmodule Weaver.Agent.Instructions do
     derived from Loom. This machine is the user's own computer: a virtual \
     machine that is theirs alone, holding their sessions, files and tools, \
     and you run in it as their user, with sudo. Weaver's control plane, \
-    outside this machine, runs you as Claude Code (the `claude` CLI in \
-    stream-json over stdin/stdout, one process per session) and relays your \
-    events to the user's browsers live. The user reads your replies in a \
+    outside this machine, #{runs_you(backend)} and relays your events to \
+    the user's browsers live. The user reads your replies in a \
     browser and cannot see this machine's filesystem, except through a \
     terminal they can open beside the chat.
 
@@ -36,11 +35,12 @@ defmodule Weaver.Agent.Instructions do
     turn it was started in. The user sees which sessions are working; work \
     that runs where nobody can see it is not wanted here.
 
-    So run subagents and commands in the foreground (`run_in_background` \
-    false, for Agent and Bash alike) and wait for them before ending the turn; \
-    several foreground subagents in one message still run in parallel. This \
-    holds even when a skill or plugin says to dispatch background agents: \
-    those were written for a terminal that stays open.
+    So run subagents and commands in the foreground#{foreground(backend)} \
+    and wait for them before ending the turn; several foreground subagents in \
+    one message still run in parallel. This holds even when a skill or plugin \
+    says to dispatch background agents: those were written for a terminal \
+    that stays open. For work that must outlive the turn, start Weaver \
+    sessions (the `sessions` skill).
 
     ## Many images
 
@@ -76,4 +76,15 @@ defmodule Weaver.Agent.Instructions do
     the user asked for.
     """
   end
+
+  defp runs_you(:claude_code),
+    do:
+      "runs you as Claude Code (the `claude` CLI in stream-json over stdin/stdout, one process per session)"
+
+  defp runs_you(:codex),
+    do:
+      "runs you as Codex (one `codex app-server` in this machine, JSON-RPC over stdin/stdout, every session a thread in it)"
+
+  defp foreground(:claude_code), do: " (`run_in_background` false, for Agent and Bash alike)"
+  defp foreground(:codex), do: ""
 end

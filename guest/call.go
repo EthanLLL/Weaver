@@ -3,23 +3,33 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/mdlayher/vsock"
 )
 
-// `weaver <method> [json]`: call Weaver from inside the VM and print its
-// JSON reply. Exits 0 on success, 1 if Weaver says no, 2 if it can't be
-// reached. The request is a 'c' frame: {"method": "...", "args": {...}}.
+// `weaver <method> [json | -]`: call Weaver from inside the VM and print its
+// JSON reply; `-` reads the JSON from stdin. Exits 0 on success, 1 if Weaver
+// says no, 2 if it can't be reached. The request is a 'c' frame:
+// {"method": "...", "args": {...}}.
 func call(args []string) int {
 	if len(args) == 0 || len(args) > 2 {
-		fmt.Fprintln(os.Stderr, "usage: weaver <method> [json-args]")
+		fmt.Fprintln(os.Stderr, "usage: weaver <method> [json-args | -]")
 		return 2
 	}
 	req := map[string]any{"method": args[0], "args": map[string]any{}}
 	if len(args) == 2 {
+		raw := []byte(args[1])
+		if args[1] == "-" {
+			var err error
+			if raw, err = io.ReadAll(os.Stdin); err != nil {
+				fmt.Fprintln(os.Stderr, "weaver: cannot read stdin:", err)
+				return 2
+			}
+		}
 		var a any
-		if err := json.Unmarshal([]byte(args[1]), &a); err != nil {
+		if err := json.Unmarshal(raw, &a); err != nil {
 			fmt.Fprintln(os.Stderr, "weaver: args are not JSON:", err)
 			return 2
 		}
