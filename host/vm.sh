@@ -47,6 +47,12 @@ sudo iptables -C FORWARD -i $tap -o $out -j ACCEPT 2>/dev/null || sudo iptables 
 sudo iptables -C FORWARD -i $out -o $tap -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null ||
   sudo iptables -A FORWARD -i $out -o $tap -m state --state RELATED,ESTABLISHED -j ACCEPT
 
+# A guest must never reach the host's instance metadata, and with it the
+# host's role. (The instance's hop limit of 1 already stops IMDSv2 tokens
+# that crossed the NAT; this drops the packets outright.)
+sudo iptables -C FORWARD -i fc+ -d 169.254.169.254 -j DROP 2>/dev/null ||
+  sudo iptables -I FORWARD -i fc+ -d 169.254.169.254 -j DROP
+
 mac=$(printf '06:00:AC:10:%02X:02' $n)
 cat > config.json <<J
 {
