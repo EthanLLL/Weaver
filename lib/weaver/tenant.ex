@@ -23,9 +23,11 @@ defmodule Weaver.Tenant do
   is not running is booted first (`Weaver.Host.boot/1`): one made at sign-up
   has never run. The tenant then counts its
   holders (browser channels that `hold/2` it) and its live sessions and
-  terminals; with none of either for `@idle_grace`, the whole tree stops.
-  Everything it held is in the VM already, so stopping loses nothing, and
-  starting again reads it back.
+  terminals; with none of either for `@idle_grace`, the whole tree stops, and
+  then its VM (`Weaver.Host.idle/1`). Everything it held is on the VM's disk
+  already, so stopping loses nothing, and starting again reads it back. What
+  is lost is what only ran: a program the tenant left running in the VM, or
+  the browser, whose profile and logins stay.
 
   ## What it holds
 
@@ -240,7 +242,13 @@ defmodule Weaver.Tenant do
       true ->
         Logger.info("Weaver.Tenant #{state.tenant} idle, stopping")
         tree = GenServer.whereis(via(state.tenant, :tree))
-        spawn(fn -> DynamicSupervisor.terminate_child(Weaver.Tenants, tree) end)
+        t = state.tenant
+
+        spawn(fn ->
+          DynamicSupervisor.terminate_child(Weaver.Tenants, tree)
+          Weaver.Host.idle(t)
+        end)
+
         {:noreply, state}
     end
   end

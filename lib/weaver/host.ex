@@ -8,9 +8,17 @@ defmodule Weaver.Host do
   directory is what `Weaver.Calls` listens for and `Weaver.Cron` times, so a
   tenant who has never logged in is still a tenant, and costs only its disk.
 
-  This process makes both one at a time per VM: two sign-ups must not take
-  the same network, and everything that wants a stopped VM at once waits on
-  the one boot.
+  A VM whose tenant has gone idle is shut down (`idle/1`, from
+  `Weaver.Tenant`): memory is what limits how many fit on a host, and a boot
+  is a couple of seconds. Shut down, not killed: the guest is sent
+  Ctrl-Alt-Del and goes down as on a reboot, its disks synced, and
+  Firecracker exits (`reboot=k`).
+
+  This process orders all of it, one thing at a time per VM: two sign-ups
+  must not take the same network, everything that wants a stopped VM at once
+  waits on the one boot, and a boot asked for while the VM is going down
+  waits for it to be down. A VM wanted again within `@reuse_ms` of a boot is
+  not shut down: the tenant stopping and starting again cross here.
   """
   use GenServer
 
@@ -21,6 +29,8 @@ defmodule Weaver.Host do
   # Taps fc1..fc250, guest 172.16.<n>.2 (`vm.sh`).
   @nets 1..250
   @boot_timeout :timer.seconds(60)
+  @shutdown_timeout :timer.seconds(30)
+  @reuse_ms :timer.seconds(30)
 
   def dir, do: @dir
 
@@ -56,7 +66,11 @@ defmodule Weaver.Host do
     end
   end
 
-  def stop(name), do: run(["systemctl", "stop", unit(name)])
+  @doc "Shut a VM down cleanly, killing it if it does not go within `@shutdown_timeout`."
+  def stop(name), do: shutdown(name)
+
+  @doc "The tenant `name` has stopped: shut its VM down, unless it is wanted again."
+  def idle(name), do: GenServer.cast(__MODULE__, {:idle, name})
 
   @doc "Stop a VM and delete it, disk and all. For `Weaver.Accounts.delete/1`."
   def destroy(name), do: GenServer.call(__MODULE__, {:destroy, name}, :timer.minutes(1))
@@ -64,7 +78,7 @@ defmodule Weaver.Host do
   # ── Server ──────────────────────────────────────────────────────────────
 
   @impl true
-  def init(nil), do: {:ok, %{booting: %{}}}
+  def init(nil), do: {:ok, %{booting: %{}, stopping: %{}, used: %{}}}
 
   @impl true
   def handle_call({:create, name}, _from, state), do: {:reply, make(name), state}
@@ -74,7 +88,7 @@ defmodule Weaver.Host do
 
     reply =
       with true <- File.exists?(dir) || {:error, :no_such_vm},
-           :ok <- if(status(name) == "active", do: stop(name), else: :ok) do
+           :ok <- if(status(name) == "active", do: kill(name), else: :ok) do
         Weaver.Calls.forget(name)
         File.rm_rf!(dir)
         :ok
@@ -84,25 +98,36 @@ defmodule Weaver.Host do
   end
 
   def handle_call({:boot, name}, from, state) do
+    state = put_in(state.used[name], now())
+
     cond do
       Map.has_key?(state.booting, name) ->
         {:noreply, update_in(state.booting[name], &[from | &1])}
+
+      Map.has_key?(state.stopping, name) ->
+        {:noreply, update_in(state.stopping[name], &[from | &1])}
 
       ready?(name) ->
         {:reply, :ok, state}
 
       true ->
-        server = self()
+        {:noreply, start_boot(state, name, [from])}
+    end
+  end
 
-        Task.start(fn ->
-          started = System.monotonic_time(:millisecond)
-          result = with :ok <- start_unless_running(name), do: await_guest(name, started)
-          ms = System.monotonic_time(:millisecond) - started
-          Logger.info("Weaver.Host: booted #{name} in #{ms} ms: #{inspect(result)}")
-          send(server, {:booted, name, result})
-        end)
+  @impl true
+  def handle_cast({:idle, name}, state) do
+    wanted =
+      Map.has_key?(state.booting, name) or Map.has_key?(state.stopping, name) or
+        now() - Map.get(state.used, name, 0) < @reuse_ms or
+        Registry.lookup(Weaver.Local, {:tree, name}) != []
 
-        {:noreply, put_in(state.booting[name], [from])}
+    if wanted or status(name) != "active" do
+      {:noreply, state}
+    else
+      server = self()
+      Task.start(fn -> send(server, {:stopped, name, shutdown(name)}) end)
+      {:noreply, put_in(state.stopping[name], [])}
     end
   end
 
@@ -112,6 +137,29 @@ defmodule Weaver.Host do
     for from <- waiting, do: GenServer.reply(from, result)
     {:noreply, %{state | booting: booting}}
   end
+
+  def handle_info({:stopped, name, result}, state) do
+    Logger.info("Weaver.Host: shut #{name} down: #{inspect(result)}")
+    {waiting, stopping} = Map.pop(state.stopping, name)
+    state = %{state | stopping: stopping}
+    # Asked for while it was going down.
+    {:noreply, if(waiting == [], do: state, else: start_boot(state, name, waiting))}
+  end
+
+  defp start_boot(state, name, waiting) do
+    server = self()
+
+    Task.start(fn ->
+      started = now()
+      result = with :ok <- start_unless_running(name), do: await_guest(name, started)
+      Logger.info("Weaver.Host: booted #{name} in #{now() - started} ms: #{inspect(result)}")
+      send(server, {:booted, name, result})
+    end)
+
+    put_in(state.booting[name], waiting)
+  end
+
+  defp now, do: System.monotonic_time(:millisecond)
 
   # ── Making ──────────────────────────────────────────────────────────────
 
@@ -181,7 +229,7 @@ defmodule Weaver.Host do
       ready?(name) ->
         :ok
 
-      System.monotonic_time(:millisecond) - started > @boot_timeout ->
+      now() - started > @boot_timeout ->
         {:error, :boot_timeout}
 
       true ->
@@ -189,6 +237,54 @@ defmodule Weaver.Host do
         await_guest(name, started)
     end
   end
+
+  # ── Shutting down ───────────────────────────────────────────────────────
+
+  defp shutdown(name) do
+    if status(name) == "active" do
+      ctrl_alt_del(name)
+      if await_down(name, now()) == :ok, do: :ok, else: kill(name)
+    else
+      :ok
+    end
+  end
+
+  # Firecracker's API, over its socket beside the VM's.
+  defp ctrl_alt_del(name) do
+    body = ~s({"action_type":"SendCtrlAltDel"})
+
+    with {:ok, sock} <-
+           :gen_tcp.connect({:local, Path.join([@dir, name, "api.sock"])}, 0, [
+             :binary,
+             active: false
+           ]) do
+      :gen_tcp.send(
+        sock,
+        "PUT /actions HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\n" <>
+          "Content-Length: #{byte_size(body)}\r\n\r\n" <> body
+      )
+
+      :gen_tcp.recv(sock, 0, 5_000)
+      :gen_tcp.close(sock)
+    end
+  end
+
+  defp await_down(name, started) do
+    cond do
+      status(name) != "active" ->
+        :ok
+
+      now() - started > @shutdown_timeout ->
+        Logger.warning("Weaver.Host: #{name} did not shut down, killing it")
+        :timeout
+
+      true ->
+        Process.sleep(200)
+        await_down(name, started)
+    end
+  end
+
+  defp kill(name), do: run(["systemctl", "stop", unit(name)])
 
   defp unit(name), do: "weaver-vm@#{name}"
 
