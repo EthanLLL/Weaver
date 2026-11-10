@@ -52,11 +52,17 @@ sudo iptables -C FORWARD -i $tap -o $out -j ACCEPT 2>/dev/null || sudo iptables 
 sudo iptables -C FORWARD -i $out -o $tap -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null ||
   sudo iptables -A FORWARD -i $out -o $tap -m state --state RELATED,ESTABLISHED -j ACCEPT
 
-# A guest must never reach the host's instance metadata, and with it the
-# host's role. (The instance's hop limit of 1 already stops IMDSv2 tokens
-# that crossed the NAT; this drops the packets outright.)
-sudo iptables -C FORWARD -i fc+ -d 169.254.169.254 -j DROP 2>/dev/null ||
-  sudo iptables -I FORWARD -i fc+ -d 169.254.169.254 -j DROP
+# The tap carries one thing: the guest's traffic to the internet. Everything
+# between host and guest goes over vsock. So a guest reaches nothing on the
+# host itself (epmd and Erlang distribution listen there), no private address
+# (the NAT would make it look like the host to the other host's security
+# group), no other guest, and not the instance metadata, which would give it
+# the host's role. Inserted ahead of the ACCEPT above.
+drop() { sudo iptables -C "$@" -j DROP 2>/dev/null || sudo iptables -I "$@" -j DROP; }
+drop INPUT -i fc+
+for net in 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 169.254.0.0/16; do
+  drop FORWARD -i fc+ -d $net
+done
 
 mac=$(printf '06:00:AC:10:%02X:02' $n)
 cat > config.json <<J
