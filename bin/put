@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# put <host> <local-file> <remote-path> — copy a file to weaver-<host> through a private S3 bucket
+# (the host's role may read it).
+set -e
+export AWS_REGION=ap-southeast-1
+bucket=weaver-artifacts-449235829501 key=tmp/$(date +%s%N)-$(basename "$2")
+aws s3 cp --quiet "$2" s3://$bucket/$key
+"$(dirname "$0")/w" "$1" "mkdir -p \"\$(dirname $3)\" && aws s3 cp --quiet --region $AWS_REGION s3://$bucket/$key $3.tmp && mv $3.tmp $3 && ls -l $3"
+aws s3 rm --quiet s3://$bucket/$key

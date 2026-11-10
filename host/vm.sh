@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # vm.sh <name> <n> — create and start tenant VM <name> as systemd unit weaver-vm@<name>.
 # <n> (1..250) picks its network: tap fc<n>, host 172.16.<n>.1, guest 172.16.<n>.2, outbound NAT.
-# Control channel: vsock, host side /opt/weaver/vms/<name>/vsock.sock.
+# Control channel: weaver-guest on vsock port 1024, host side /opt/weaver/vms/<name>/vsock.sock.
 set -euo pipefail
 name=$1 n=$2 dir=/opt/weaver/vms/$1
 mkdir -p $dir && cd $dir
@@ -11,6 +11,17 @@ if [ ! -f rootfs.ext4 ]; then
   rm -rf root && sudo unsquashfs -q -d root /opt/weaver/ubuntu.squashfs
   echo $name | sudo tee root/etc/hostname >/dev/null
   printf 'nameserver 1.1.1.1\n' | sudo tee root/etc/resolv.conf >/dev/null
+  sudo install -m 755 /opt/weaver/weaver-guest root/usr/local/bin/weaver-guest
+  sudo tee root/etc/systemd/system/weaver-guest.service >/dev/null <<U
+[Unit]
+Description=Weaver guest daemon (vsock port 1024)
+[Service]
+ExecStart=/usr/local/bin/weaver-guest
+Restart=always
+[Install]
+WantedBy=multi-user.target
+U
+  sudo ln -sf /etc/systemd/system/weaver-guest.service root/etc/systemd/system/multi-user.target.wants/weaver-guest.service
   truncate -s 4G rootfs.ext4 && sudo mkfs.ext4 -q -d root -F rootfs.ext4 && sudo rm -rf root
   sudo chown ubuntu: rootfs.ext4
 fi

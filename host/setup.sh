@@ -3,6 +3,11 @@
 set -euo pipefail
 arch=$(uname -m)
 sudo usermod -aG kvm ubuntu
+command -v aws >/dev/null || {
+  sudo apt-get install -qq -y unzip >/dev/null
+  curl -fsSL -o /tmp/awscli.zip https://awscli.amazonaws.com/awscli-exe-linux-$arch.zip
+  (cd /tmp && unzip -q -o awscli.zip && sudo ./aws/install >/dev/null && rm -rf aws awscli.zip)
+}
 sudo mkdir -p /opt/weaver && sudo chown ubuntu: /opt/weaver && cd /opt/weaver
 
 tag=$(curl -fsSL -o /dev/null -w '%{url_effective}' https://github.com/firecracker-microvm/firecracker/releases/latest | sed 's#.*/##')
