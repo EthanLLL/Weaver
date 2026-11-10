@@ -4,7 +4,7 @@
 # Control channel: weaver-guest on vsock port 1024, host side /opt/weaver/vms/<name>/vsock.sock.
 set -euo pipefail
 name=$1 n=$2 dir=/opt/weaver/vms/$1
-mkdir -p $dir && cd $dir
+mkdir -p $dir && cd $dir && echo $n > net
 
 if [ ! -f rootfs.ext4 ]; then
   command -v unsquashfs >/dev/null || sudo apt-get install -qq -y squashfs-tools >/dev/null
@@ -53,7 +53,11 @@ cat > config.json <<J
   "vsock": {"guest_cid": 3, "uds_path": "$dir/vsock.sock"}
 }
 J
-rm -f vsock.sock api.sock
+# A tenant VM is never restarted behind its back: needrestart, after an apt
+# upgrade, would restart the unit and with it the guest.
+[ -f /etc/needrestart/conf.d/weaver.conf ] ||
+  echo '$nrconf{override_rc}{qr(^weaver-vm@)} = 0;' | sudo tee /etc/needrestart/conf.d/weaver.conf >/dev/null
+sudo systemctl reset-failed weaver-vm@$name 2>/dev/null || true
 sudo systemd-run --unit weaver-vm@$name --uid ubuntu --gid kvm --working-directory $dir \
-  -p StandardOutput=file:$dir/console.log -p StandardError=file:$dir/console.log \
-  firecracker --api-sock $dir/api.sock --config-file $dir/config.json
+  -p StandardOutput=append:$dir/console.log -p StandardError=append:$dir/console.log \
+  sh -c "rm -f vsock.sock api.sock; exec firecracker --api-sock api.sock --config-file config.json"

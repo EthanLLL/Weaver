@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# ctl <host> 'elixir expr' — evaluate an expression on weaver-<host>'s node (e.g. 'IO.inspect Weaver.tenants()').
+expr=$(printf '%s' "$2" | base64 -w0)
+exec "$(dirname "$0")/w" "$1" "ip=\$(hostname -I | cut -d' ' -f1); elixir --name ctl-\$\$@\$ip --rpc-eval weaver@\$ip \"Code.eval_string(Base.decode64!(\\\"$expr\\\"))\""

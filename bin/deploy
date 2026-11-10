@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# deploy — ship this checkout's control plane to both hosts and (re)start weaver.service there.
+set -e
+cd "$(dirname "$0")/.."
+hosts=(1 2)
+declare -A ip
+for h in "${hosts[@]}"; do
+  ip[$h]=$(aws ec2 describe-instances --region ap-southeast-1 \
+    --filters Name=tag:Name,Values=weaver-$h Name=instance-state-name,Values=running \
+    --query 'Reservations[0].Instances[0].PrivateIpAddress' --output text)
+done
+peers=$(for h in "${hosts[@]}"; do printf 'weaver@%s,' "${ip[$h]}"; done); peers=${peers%,}
+[ -f .cookie ] || (umask 077; head -c 24 /dev/urandom | base64 | tr -d '/+=' > .cookie)
+tar czf /tmp/weaver-app.tgz mix.exs lib host
+
+for h in "${hosts[@]}"; do
+  cat > /tmp/weaver.service <<U
+[Unit]
+Description=Weaver control plane node
+After=network-online.target
+[Service]
+User=ubuntu
+WorkingDirectory=/opt/weaver/app
+Environment=MIX_ENV=prod HOME=/home/ubuntu WEAVER_PEERS=$peers
+ExecStart=/usr/local/bin/elixir --name weaver@${ip[$h]} --erl "-kernel inet_dist_listen_min 9100 inet_dist_listen_max 9105" -S mix run --no-halt
+Restart=always
+[Install]
+WantedBy=multi-user.target
+U
+  bin/put $h /tmp/weaver-app.tgz /opt/weaver/app.tgz >/dev/null
+  bin/put $h /tmp/weaver.service /opt/weaver/weaver.service >/dev/null
+  bin/put $h .cookie /home/ubuntu/.erlang.cookie.new >/dev/null
+  bin/w $h 'set -e
+install -m 400 ~/.erlang.cookie.new ~/.erlang.cookie && rm ~/.erlang.cookie.new
+rm -rf /opt/weaver/app && mkdir -p /opt/weaver/app && tar xzf /opt/weaver/app.tgz -C /opt/weaver/app
+install -m 755 /opt/weaver/app/host/vm.sh /opt/weaver/vm.sh
+cd /opt/weaver/app && MIX_ENV=prod mix compile >/dev/null
+sudo install -m 644 /opt/weaver/weaver.service /etc/systemd/system/weaver.service
+sudo systemctl daemon-reload && sudo systemctl enable -q weaver && sudo systemctl restart weaver
+sleep 3; echo "weaver-'$h': $(systemctl is-active weaver)"'
+done
+rm -f /tmp/weaver-app.tgz /tmp/weaver.service

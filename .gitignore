@@ -1,3 +1,4 @@
 guest/weaver-guest
 _build/
 deps/
+.cookie
