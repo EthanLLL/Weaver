@@ -22,7 +22,7 @@ defmodule WeaverWeb.TerminalChannel do
              self(),
              [user: "tenant", pty: {clamp(rows), clamp(cols)}]
            ]) do
-      {:ok, %{tenant: tenant, node: node}, assign(socket, :exec, exec)}
+      {:ok, %{tenant: tenant, node: node, web: node()}, assign(socket, :exec, exec)}
     else
       {:error, reason} -> {:error, %{reason: inspect(reason)}}
     end

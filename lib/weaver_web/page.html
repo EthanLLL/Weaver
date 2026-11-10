@@ -74,7 +74,7 @@
         channel.leave(); channel = null
       })
       channel.join()
-        .receive("ok", ({ node }) => { status.textContent = `shell on ${node}` })
+        .receive("ok", ({ node, web }) => { status.textContent = `shell on ${node}, via ${web}` })
         .receive("error", ({ reason }) => { status.textContent = `cannot open a shell: ${reason}` })
     }
 
