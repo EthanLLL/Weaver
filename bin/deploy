@@ -13,6 +13,8 @@ for h in "${hosts[@]}"; do
 done
 peers=$(for h in "${hosts[@]}"; do printf 'weaver@%s,' "${ip[$h]}"; done); peers=${peers%,}
 [ -f .cookie ] || (umask 077; head -c 24 /dev/urandom | base64 | tr -d '/+=' > .cookie)
+# weaver-node for the devices, built into priv/node (GET /node/download/:target).
+make -s -C node >/dev/null
 # The frontend, built into priv/static.
 (cd frontend && npm run build >/dev/null 2>&1) && rm -rf priv/static && cp -r frontend/dist priv/static
 tar czf /tmp/weaver-app.tgz mix.exs mix.lock config lib host priv

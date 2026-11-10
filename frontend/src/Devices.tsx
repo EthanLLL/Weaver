@@ -12,7 +12,7 @@ import {
 } from "./api"
 
 /**
- * The user's machines that agents can reach through `loom-node` — add, rename,
+ * The user's machines that agents can reach through `weaver-node` — add, rename,
  * remove, and get the command that installs one.
  *
  * Who is online comes from the lobby channel, so the dots change while the
@@ -65,7 +65,7 @@ export function DevicesDialog({
   }
 
   const remove = async (device: Device) => {
-    if (!confirm(`Remove ${device.name}? Its loom-node stops working until it is added and installed again.`)) return
+    if (!confirm(`Remove ${device.name}? Its weaver-node stops working until it is added and installed again.`)) return
     try {
       await deleteDevice(device.id)
       if (install?.id === device.id) setInstall(null)

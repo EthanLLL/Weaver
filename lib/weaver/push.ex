@@ -238,14 +238,25 @@ defmodule Weaver.Push do
   end
 
   defp load(t) do
-    with {:ok, body} <- Weaver.FS.read(t, path()),
-         {:ok, %{"subscriptions" => subs}} when is_list(subs) <- Jason.decode(body) do
-      for sub <- subs, is_binary(sub["endpoint"]), into: %{} do
-        {sub["endpoint"],
-         Map.new(~w(endpoint p256dh auth origin created_at)a, &{&1, sub[to_string(&1)]})}
-      end
-    else
-      _ -> %{}
+    case Weaver.FS.read(t, path()) do
+      {:ok, body} ->
+        case Jason.decode(body) do
+          {:ok, %{"subscriptions" => subs}} when is_list(subs) ->
+            for sub <- subs, is_binary(sub["endpoint"]), into: %{} do
+              {sub["endpoint"],
+               Map.new(~w(endpoint p256dh auth origin created_at)a, &{&1, sub[to_string(&1)]})}
+            end
+
+          _ ->
+            %{}
+        end
+
+      {:error, :enoent} ->
+        %{}
+
+      # Not "none": saving over it would forget every subscription.
+      {:error, reason} ->
+        raise "Weaver.Push #{t} cannot read #{path()}: #{inspect(reason)}"
     end
   end
 

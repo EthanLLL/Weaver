@@ -7,7 +7,8 @@ defmodule Weaver.Calls do
   this host. Which socket a call came in on is which tenant made it, so a
   call carries no credentials, and a method sees only its own tenant.
 
-  Methods are the `call/3` clauses below and nothing else.
+  Methods are the `call/3` clauses below and nothing else, and `node.*`,
+  which stream and are `Weaver.Calls.Node`'s.
   """
   use GenServer
 
@@ -146,17 +147,25 @@ defmodule Weaver.Calls do
 
     with {:ok, <<?c, body::binary>>} <- :gen_tcp.recv(sock, 0, 10_000),
          {:ok, %{"method" => method} = req} <- JSON.decode(body) do
-      case call(vm, method, req["args"] || %{}) do
-        {:ok, reply} ->
-          :gen_tcp.send(sock, [?o, JSON.encode!(reply)]) && :gen_tcp.send(sock, <<?q, 0::32>>)
-
-        {:error, why} ->
-          :gen_tcp.send(sock, [?f, why])
+      case method do
+        # Streams both ways, for as long as the request runs.
+        "node." <> _ -> Weaver.Calls.Node.serve(sock, vm, method, req["args"] || %{})
+        _ -> reply(sock, vm, method, req["args"] || %{})
       end
     else
       _ -> :gen_tcp.send(sock, [?f, "bad call"])
     end
 
     :gen_tcp.close(sock)
+  end
+
+  defp reply(sock, vm, method, args) do
+    case call(vm, method, args) do
+      {:ok, reply} ->
+        :gen_tcp.send(sock, [?o, JSON.encode!(reply)]) && :gen_tcp.send(sock, <<?q, 0::32>>)
+
+      {:error, why} ->
+        :gen_tcp.send(sock, [?f, why])
+    end
   end
 end

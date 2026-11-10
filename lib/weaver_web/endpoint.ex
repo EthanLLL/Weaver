@@ -14,6 +14,15 @@ defmodule WeaverWeb.Endpoint do
     longpoll: false
   )
 
+  # `weaver-node daemon` on the tenant's own machines. Its own socket, so a
+  # device token can never open a session or a terminal; see
+  # `WeaverWeb.NodeSocket`. A device that vanished without closing is let go
+  # within a minute; the daemon heartbeats every 15s.
+  socket("/node", WeaverWeb.NodeSocket,
+    websocket: [connect_info: [:uri], check_origin: false, timeout: 45_000],
+    longpoll: false
+  )
+
   plug(Plug.Static,
     at: "/assets",
     from: {:weaver, "priv/static/assets"},

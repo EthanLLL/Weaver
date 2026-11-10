@@ -5,8 +5,8 @@ defmodule WeaverWeb.LobbyChannel do
   tenant's lobby topic (`Weaver.Tenant.lobby_topic/1`).
 
   Server → client: join reply `%{sessions, nodes, apps, directory_order}`
-  (no devices or apps in Weaver yet), then "session", "removed",
-  "directory_order". Client → server: "directory_order", "search"
+  (no apps in Weaver), then "session", "removed", "directory_order",
+  "node" and "node_removed" (`Weaver.Nodes`). Client → server: "directory_order", "search"
   (`Weaver.Search`) and "watching" (`Weaver.Push`).
 
   Joining holds the tenant up for as long as the channel lives.
@@ -24,7 +24,7 @@ defmodule WeaverWeb.LobbyChannel do
     {:ok,
      %{
        sessions: Tenant.sessions(t),
-       nodes: [],
+       nodes: WeaverWeb.At.at(t, Weaver.Nodes, :list, []),
        apps: [],
        directory_order: Tenant.directory_order(t)
      }, socket}
@@ -71,6 +71,16 @@ defmodule WeaverWeb.LobbyChannel do
 
   def handle_info({:agent_removed, id}, socket) do
     push(socket, "removed", %{id: id})
+    {:noreply, socket}
+  end
+
+  def handle_info({:node_summary, node}, socket) do
+    push(socket, "node", node)
+    {:noreply, socket}
+  end
+
+  def handle_info({:node_removed, id}, socket) do
+    push(socket, "node_removed", %{id: id})
     {:noreply, socket}
   end
 

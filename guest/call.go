@@ -12,8 +12,11 @@ import (
 // `weaver <method> [json | -]`: call Weaver from inside the VM and print its
 // JSON reply; `-` reads the JSON from stdin. Exits 0 on success, 1 if Weaver
 // says no, 2 if it can't be reached. The request is a 'c' frame:
-// {"method": "...", "args": {...}}.
+// {"method": "...", "args": {...}}. `weaver node …` is node.go.
 func call(args []string) int {
+	if len(args) > 0 && args[0] == "node" {
+		return nodeCLI(args[1:])
+	}
 	if len(args) == 0 || len(args) > 2 {
 		fmt.Fprintln(os.Stderr, "usage: weaver <method> [json-args | -]")
 		return 2

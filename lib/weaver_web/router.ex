@@ -1,8 +1,7 @@
 defmodule WeaverWeb.Router do
   @moduledoc """
   Loom's API, for the tenant the host names (`WeaverWeb.Plugs.Tenant` has
-  put it in `conn.assigns.tenant` before this runs). Loom's devices are not here
-  (yet), nor its apps; the frontend gets empty answers for those.
+  put it in `conn.assigns.tenant` before this runs). Loom's apps are not here.
   """
   use WeaverWeb, :router
 
@@ -47,7 +46,11 @@ defmodule WeaverWeb.Router do
     get("/layout", LayoutController, :show)
     put("/layout", LayoutController, :update)
 
-    get("/devices", AbsentController, :devices)
+    get("/devices", DevicesController, :index)
+    post("/devices", DevicesController, :create)
+    patch("/devices/:id", DevicesController, :update)
+    delete("/devices/:id", DevicesController, :delete)
+    post("/devices/:id/install", DevicesController, :install)
 
     get("/push", PushController, :show)
     post("/push/subscriptions", PushController, :create)
@@ -61,6 +64,14 @@ defmodule WeaverWeb.Router do
 
   scope "/canvas-files", WeaverWeb do
     get("/:id/:token/:name", CanvasController, :attachment)
+  end
+
+  # A device joining: the install script (its one-time code is the
+  # credential) and the binary it downloads. See
+  # `WeaverWeb.NodeInstallController`.
+  scope "/node", WeaverWeb do
+    get("/install/:code", NodeInstallController, :script)
+    get("/download/:target", NodeInstallController, :download)
   end
 
   # The user taking over the tenant's browser; see `WeaverWeb.VncSocket`.
