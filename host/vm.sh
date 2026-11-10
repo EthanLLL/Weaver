@@ -12,20 +12,27 @@ if [ ! -f rootfs.ext4 ]; then
   rm -rf root && sudo unsquashfs -q -d root /opt/weaver/ubuntu.squashfs
   echo $name | sudo tee root/etc/hostname >/dev/null
   echo "127.0.1.1 $name" | sudo tee -a root/etc/hosts >/dev/null
-  # No IPv6 in the VM; apt would try it first and stall. Canonical's
-  # Singapore mirror: some nodes of the EC2 regional one answer only 503.
+  # No IPv6 in the VM; apt would try it first and stall. The region's EC2
+  # mirror is the fast one, but some of its nodes answer only 503, so
+  # Canonical's own archive follows it: apt moves to the next URI of a source
+  # when one fails. (Canonical's Singapore mirror, tried before, crawls.)
   echo 'Acquire::ForceIPv4 "true";' | sudo tee root/etc/apt/apt.conf.d/99ipv4 >/dev/null
-  sudo sed -i -E 's#http://(archive|security|[a-z0-9-]+\.ec2\.archive)\.ubuntu\.com#http://sg.archive.ubuntu.com#g' root/etc/apt/sources.list.d/ubuntu.sources
+  sudo sed -i -E 's#^URIs: .*#URIs: http://ap-southeast-1.ec2.archive.ubuntu.com/ubuntu http://archive.ubuntu.com/ubuntu#' root/etc/apt/sources.list.d/ubuntu.sources
   printf 'nameserver 1.1.1.1\n' | sudo tee root/etc/resolv.conf >/dev/null
   truncate -s 4G rootfs.ext4 && sudo mkfs.ext4 -q -d root -F rootfs.ext4 && sudo rm -rf root
   sudo chown ubuntu: rootfs.ext4
 fi
 
-# The guest daemon is the platform's, not the tenant's: every boot puts in
-# the host's current one.
+# What the platform puts in the VM is the platform's, not the tenant's: every
+# boot puts in the host's current one. The guest daemon; ripgrep for
+# Weaver.Search; the browser, its unit only, installed on its first start.
 mkdir -p mnt && sudo mount -o loop rootfs.ext4 mnt
 sudo install -m 755 /opt/weaver/weaver-guest mnt/usr/local/bin/weaver-guest
 sudo ln -sf weaver-guest mnt/usr/local/bin/weaver
+sudo install -d mnt/usr/local/lib/weaver
+sudo install -m 755 /opt/weaver/rg /opt/weaver/app/host/vm/weaver-browser \
+  /opt/weaver/app/host/vm/weaver-browser-install mnt/usr/local/lib/weaver/
+sudo install -m 644 /opt/weaver/app/host/vm/weaver-browser.service mnt/etc/systemd/system/
 sudo tee mnt/etc/systemd/system/weaver-guest.service >/dev/null <<U
 [Unit]
 Description=Weaver guest daemon (vsock port 1024)
@@ -73,7 +80,7 @@ cat > config.json <<J
   },
   "drives": [{"drive_id": "rootfs", "path_on_host": "$dir/rootfs.ext4", "is_root_device": true, "is_read_only": false}],
   "network-interfaces": [{"iface_id": "eth0", "guest_mac": "$mac", "host_dev_name": "$tap"}],
-  "machine-config": {"vcpu_count": 2, "mem_size_mib": 1024},
+  "machine-config": {"vcpu_count": 2, "mem_size_mib": 2048},
   "vsock": {"guest_cid": 3, "uds_path": "$dir/vsock.sock"}
 }
 J

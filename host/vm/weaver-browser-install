@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Run as root before weaver-browser starts: install what it needs, the first
+# time only. Google Chrome rather than Chromium: it updates with apt, plays
+# H.264, and doesn't look like a test browser to the sites. Ubuntu's chromium
+# is a snap, which a VM without snapd can't run.
+set -eu
+command -v google-chrome-stable >/dev/null && command -v x11vnc >/dev/null && exit 0
+export DEBIAN_FRONTEND=noninteractive
+deb=/tmp/google-chrome-stable_current_amd64.deb
+curl -fsSL -o $deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+apt-get update -qq
+apt-get install -qq -y xvfb x11vnc x11-utils fonts-noto-cjk $deb >/dev/null
+rm -f $deb

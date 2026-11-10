@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # deploy — ship this checkout's control plane to both hosts and (re)start weaver.service there.
-# The guest daemon goes along; a VM picks it up the next time it boots.
+# The guest daemon and what else goes into the VMs go along; a VM picks them up the next time it boots.
 # Secrets (password, secret_key_base) come from ~/weaver-ca/weaver.env, outside the repo.
 set -e
 cd "$(dirname "$0")/.."
@@ -13,7 +13,13 @@ for h in "${hosts[@]}"; do
 done
 peers=$(for h in "${hosts[@]}"; do printf 'weaver@%s,' "${ip[$h]}"; done); peers=${peers%,}
 [ -f .cookie ] || (umask 077; head -c 24 /dev/urandom | base64 | tr -d '/+=' > .cookie)
+# The frontend, built into priv/static.
+(cd frontend && npm run build >/dev/null 2>&1) && rm -rf priv/static && cp -r frontend/dist priv/static
 tar czf /tmp/weaver-app.tgz mix.exs mix.lock config lib host priv
+# ripgrep for the VMs (Weaver.Search), a static build, fetched once.
+rg=.cache/rg-14.1.1
+[ -x $rg ] || { mkdir -p .cache && curl -fsSL https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/ripgrep-14.1.1-x86_64-unknown-linux-musl.tar.gz |
+  tar xzO ripgrep-14.1.1-x86_64-unknown-linux-musl/rg > $rg && chmod +x $rg; }
 (cd guest && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags='-s -w' -o weaver-guest .)
 
 for h in "${hosts[@]}"; do
@@ -34,6 +40,7 @@ U
   bin/put $h /tmp/weaver-app.tgz /opt/weaver/app.tgz >/dev/null
   bin/put $h /tmp/weaver.service /opt/weaver/weaver.service >/dev/null
   bin/put $h guest/weaver-guest /opt/weaver/weaver-guest >/dev/null
+  bin/put $h $rg /opt/weaver/rg >/dev/null
   bin/put $h ~/weaver-ca/weaver.env /opt/weaver/weaver.env.new >/dev/null
   bin/put $h .cookie /home/ubuntu/.erlang.cookie.new >/dev/null
   bin/w $h 'set -e

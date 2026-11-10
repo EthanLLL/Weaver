@@ -13,6 +13,7 @@
 //
 //	'x' run a process (exec.go)
 //	'F' a file operation (files.go)
+//	't' a TCP connection to a port on the VM's loopback (tunnel.go)
 //	'c' a call to Weaver (call.go; VM to host)
 //
 // Frames that may follow, both ways:
@@ -71,6 +72,8 @@ func serve(c *conn) {
 		execute(c, body)
 	case 'F':
 		file(c, body)
+	case 't':
+		tunnel(c, body)
 	default:
 		c.fail("unknown request")
 	}

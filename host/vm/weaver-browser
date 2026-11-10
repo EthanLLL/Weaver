@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# The tenant's browser, in their VM: a Chrome that stays up on a virtual
+# display, for the agents to drive over CDP (127.0.0.1:9222) and for the user
+# to take over in Weaver's Browser view (x11vnc on 127.0.0.1:5900, reached by
+# the host through weaver-guest's tunnel, never over the network). Its profile
+# keeps cookies, so a site logged in to once stays logged in. Loom's
+# loom-browser.sh, in a VM.
+#
+# Everything listens on loopback only. If Chrome exits (someone closed its
+# last window), it is started again; if the display or VNC dies, so does
+# this script, and systemd restarts the lot.
+set -u
+SIZE=${WEAVER_BROWSER_SIZE:-1280x800}
+PROFILE=$HOME/.local/share/weaver-browser/profile
+export DISPLAY=:99
+
+Xvfb "$DISPLAY" -screen 0 "${SIZE}x24" -nolisten tcp &
+xvfb=$!
+for _ in $(seq 50); do xdpyinfo >/dev/null 2>&1 && break; sleep 0.1; done
+
+x11vnc -display "$DISPLAY" -localhost -rfbport 5900 -forever -shared -nopw -quiet -noxdamage &
+vnc=$!
+
+trap 'kill $xvfb $vnc 2>/dev/null; kill $(jobs -p) 2>/dev/null' EXIT
+mkdir -p "$PROFILE"
+w=${SIZE%x*}; h=${SIZE#*x}
+while kill -0 $xvfb 2>/dev/null && kill -0 $vnc 2>/dev/null; do
+  # A clean exit flag, so the next start doesn't offer to "restore pages".
+  sed -i 's/"exit_type":"Crashed"/"exit_type":"Normal"/' "$PROFILE/Default/Preferences" 2>/dev/null
+  google-chrome-stable --user-data-dir="$PROFILE" --remote-debugging-port=9222 \
+    --no-first-run --no-default-browser-check --disable-gpu \
+    --window-position=0,0 --window-size="$w,$h" --start-maximized about:blank &
+  wait $!
+  sleep 1
+done

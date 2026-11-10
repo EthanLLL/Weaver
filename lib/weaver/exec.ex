@@ -27,9 +27,24 @@ defmodule Weaver.Exec do
     :exit, _ -> :ok
   end
 
-  @doc "Run `argv` in `vm` on this host and wait: `{:ok, %{stdout, stderr, status}}`."
+  @doc """
+  Like `start/4`, from any node: on the node that has `vm`. The process is
+  still the caller's, and goes when the caller does.
+  """
+  def start_anywhere(vm, argv, owner \\ self(), opts \\ []) do
+    with {:ok, node} <- Weaver.Tenant.vm_node(vm) do
+      if node == node(),
+        do: start(vm, argv, owner, opts),
+        else: :erpc.call(node, __MODULE__, :start, [vm, argv, owner, opts])
+    end
+  end
+
+  @doc """
+  Run `argv` in `vm`, from any node, and wait: `{:ok, %{stdout, stderr,
+  status}}`. Past `timeout` it is killed, `{:error, :timeout}`.
+  """
   def run(vm, argv, opts \\ [], timeout \\ 60_000) do
-    with {:ok, pid} <- start(vm, argv, self(), opts) do
+    with {:ok, pid} <- start_anywhere(vm, argv, self(), opts) do
       close(pid)
       collect(pid, [], [], timeout)
     end

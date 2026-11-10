@@ -5,6 +5,8 @@ import {
   FolderInput,
   FolderMinus,
   FolderOpen,
+  Globe,
+  MonitorSmartphone,
   PanelLeftClose,
   Plus,
   Search,
@@ -14,6 +16,7 @@ import {
 import { useEffect, useRef, useState } from "react"
 import type { AgentBackend, AgentInfo, Device } from "./api"
 import { RenameInput } from "./Confirm"
+import { DevicesDialog } from "./Devices"
 import { filed, ROOT } from "./directories"
 import { ago } from "./format"
 import { dirName, MoveTargets } from "./MovePicker"
@@ -63,6 +66,8 @@ type Props = {
 
 export function Sidebar({
   sessions,
+  devices,
+  onUpsertDevice,
   push,
   vim,
   activeId,
@@ -80,6 +85,8 @@ export function Sidebar({
   narrow,
   onSearch,
   onCollapse,
+  browserOpen,
+  onToggleBrowser,
 }: Props) {
   // Ages are relative, so they go stale without any new data. A local clock,
   // not a poll: nothing is fetched.
@@ -88,7 +95,9 @@ export function Sidebar({
     const timer = setInterval(() => setNow(Date.now()), 30_000)
     return () => clearInterval(timer)
   }, [])
+  const [devicesOpen, setDevicesOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const online = devices.filter((d) => d.online).length
   // Directories first, in the order dragged into, each folded or unfolded as
   // last left on this device; then Recents, what is in none. The sessions in a
   // directory go by activity, like Recents; only the directories are dragged.
@@ -235,6 +244,39 @@ export function Sidebar({
       </div>
 
       <div className="sidebar-foot">
+        {/* The tenant's browser, in their VM, the one agents drive: taking it over is how a
+            site gets logged in to once and stays logged in. */}
+        <button
+          className={"devices-btn push-btn" + (browserOpen ? " on" : "")}
+          onClick={onToggleBrowser}
+          title="Your browser: log in to a site, or get past a check for the agents"
+        >
+          <Globe />
+          <span>Browser</span>
+          <span className="devices-count">{browserOpen ? "open" : ""}</span>
+        </button>
+
+        {/* The user's own machines, reachable by agents through `weaver node`. */}
+        <button
+          className={"devices-btn push-btn" + (online > 0 ? " on" : "")}
+          onClick={() => setDevicesOpen(true)}
+          title="Devices"
+        >
+          {/* An icon like the rows beside it, so the labels line up; lit while any is online. */}
+          <MonitorSmartphone />
+          <span>Devices</span>
+          <span className="devices-count">
+            {online}/{devices.length}
+          </span>
+        </button>
+        {devicesOpen && (
+          <DevicesDialog
+            devices={devices}
+            onUpsert={onUpsertDevice}
+            onClose={() => setDevicesOpen(false)}
+          />
+        )}
+
         {/* Theme, Vim keys and notifications: this device's preferences. */}
         <button className="devices-btn push-btn" onClick={() => setSettingsOpen(true)} title="Settings">
           <Settings />

@@ -1,9 +1,9 @@
 defmodule WeaverWeb.Router do
   @moduledoc """
   Loom's API, for the tenant the host names (`WeaverWeb.Plugs.Tenant` has
-  put it in `conn.assigns.tenant` before this runs). Loom's devices, push
-  notifications, apps and browser are not here (yet); the frontend gets
-  empty answers for those.
+  put it in `conn.assigns.tenant` before this runs). Loom's devices and push
+  notifications are not here (yet), nor its apps; the frontend gets empty
+  answers for those.
   """
   use WeaverWeb, :router
 
@@ -59,6 +59,12 @@ defmodule WeaverWeb.Router do
 
   scope "/canvas-files", WeaverWeb do
     get("/:id/:token/:name", CanvasController, :attachment)
+  end
+
+  # The user taking over the tenant's browser; see `WeaverWeb.VncSocket`.
+  # Checks the token itself.
+  scope "/browser", WeaverWeb do
+    get("/vnc", BrowserController, :vnc)
   end
 
   scope "/", WeaverWeb do

@@ -6,8 +6,8 @@ defmodule WeaverWeb.LobbyChannel do
 
   Server → client: join reply `%{sessions, nodes, apps, directory_order}`
   (no devices or apps in Weaver yet), then "session", "removed",
-  "directory_order". Client → server: "directory_order", "watching" and
-  "search" (not in Weaver yet; search replies `no_rg`).
+  "directory_order". Client → server: "directory_order", "search"
+  (`Weaver.Search`) and "watching" (not in Weaver yet).
 
   Joining holds the tenant up for as long as the channel lives.
   """
@@ -38,7 +38,25 @@ defmodule WeaverWeb.LobbyChannel do
     end
   end
 
-  def handle_in("search", _params, socket), do: {:reply, {:error, %{reason: "no_rg"}}, socket}
+  # As in Loom: off the channel process, replied to by ref, and a new one
+  # kills the one before it (and with it rg in the VM).
+  def handle_in("search", %{"q" => q}, socket) when is_binary(q) do
+    if pid = socket.assigns[:search], do: Process.exit(pid, :kill)
+    ref = socket_ref(socket)
+    t = socket.assigns.tenant
+
+    pid =
+      spawn(fn ->
+        case Weaver.Search.content(t, q) do
+          {:ok, hits} -> reply(ref, {:ok, %{hits: hits}})
+          {:error, :no_rg} -> reply(ref, {:error, %{reason: "no_rg"}})
+          {:error, reason} -> reply(ref, {:error, %{reason: inspect(reason)}})
+        end
+      end)
+
+    {:noreply, assign(socket, :search, pid)}
+  end
+
   def handle_in("watching", _params, socket), do: {:noreply, socket}
 
   @impl true

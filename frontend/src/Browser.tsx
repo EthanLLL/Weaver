@@ -4,9 +4,11 @@ import { ArrowRightToLine, ChevronLeft, CornerDownLeft, Delete, Keyboard, Maximi
 import { getToken } from "./api"
 
 /**
- * Loom's own browser — the Chromium that agents drive over CDP — shown here so
- * the user can take it over: log in to a site once, get past a check that
- * wants a human. Over VNC: `LoomWeb.VncSocket` carries it, noVNC draws it.
+ * The tenant's browser — the Chrome in their VM that agents drive over CDP —
+ * shown here so the user can take it over: log in to a site once, get past a
+ * check that wants a human. Over VNC: `WeaverWeb.VncSocket` carries it, noVNC
+ * draws it. Opening it starts the browser; the first time, Chrome is
+ * installed, and this stays "connecting" for about a minute.
  *
  * Mounted only while shown, so a closed pane holds no connection open.
  */

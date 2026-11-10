@@ -1,0 +1,20 @@
+# The tenant's browser (weaver-browser). Not started at boot: Weaver starts it
+# when the user opens the Browser view, an agent with `sudo systemctl start
+# weaver-browser`. The first start installs Chrome, about a minute.
+[Unit]
+Description=Weaver browser (Chrome on a virtual display)
+After=network-online.target
+
+[Service]
+Type=exec
+User=tenant
+Environment=HOME=/home/tenant
+Environment=LANG=C.UTF-8
+ExecStartPre=+/usr/local/lib/weaver/weaver-browser-install
+ExecStart=/usr/local/lib/weaver/weaver-browser
+TimeoutStartSec=10min
+Restart=always
+RestartSec=3
+# Past this, Chrome loses a tab, not the agent its process.
+MemoryHigh=1200M
+MemoryMax=1500M
