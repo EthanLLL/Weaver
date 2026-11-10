@@ -7,7 +7,9 @@ defmodule Weaver.Application do
     children = [
       {DynamicSupervisor, name: Weaver.Execs, strategy: :one_for_one},
       Weaver.Calls,
-      Weaver.Peers
+      Weaver.Peers,
+      {Phoenix.PubSub, name: Weaver.PubSub},
+      WeaverWeb.Endpoint
     ]
 
     Supervisor.start_link(children, strategy: :one_for_one, name: Weaver.Supervisor)
