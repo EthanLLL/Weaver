@@ -1,9 +1,8 @@
 defmodule WeaverWeb.Router do
   @moduledoc """
   Loom's API, for the tenant the host names (`WeaverWeb.Plugs.Tenant` has
-  put it in `conn.assigns.tenant` before this runs). Loom's devices and push
-  notifications are not here (yet), nor its apps; the frontend gets empty
-  answers for those.
+  put it in `conn.assigns.tenant` before this runs). Loom's devices are not here
+  (yet), nor its apps; the frontend gets empty answers for those.
   """
   use WeaverWeb, :router
 
@@ -49,7 +48,10 @@ defmodule WeaverWeb.Router do
     put("/layout", LayoutController, :update)
 
     get("/devices", AbsentController, :devices)
-    get("/push", AbsentController, :not_here)
+
+    get("/push", PushController, :show)
+    post("/push/subscriptions", PushController, :create)
+    delete("/push/subscriptions", PushController, :delete)
   end
 
   scope "/canvas", WeaverWeb do

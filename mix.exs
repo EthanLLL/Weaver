@@ -12,7 +12,7 @@ defmodule Weaver.MixProject do
   end
 
   def application do
-    [extra_applications: [:logger], mod: {Weaver.Application, []}]
+    [extra_applications: [:logger, :inets, :ssl], mod: {Weaver.Application, []}]
   end
 
   defp deps do

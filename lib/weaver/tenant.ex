@@ -123,6 +123,9 @@ defmodule Weaver.Tenant do
 
   def lobby_topic(t), do: "tenant:#{t}:agents"
 
+  @doc "Where sessions announce a finished turn, for `Weaver.Push`: `{:turn_ended, id, summary}`."
+  def turns_topic(t), do: "tenant:#{t}:turns"
+
   defp call(t, msg) do
     with {:ok, pid} <- ensure(t), do: GenServer.call(pid, msg)
   end

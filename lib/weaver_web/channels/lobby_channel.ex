@@ -7,7 +7,7 @@ defmodule WeaverWeb.LobbyChannel do
   Server → client: join reply `%{sessions, nodes, apps, directory_order}`
   (no devices or apps in Weaver yet), then "session", "removed",
   "directory_order". Client → server: "directory_order", "search"
-  (`Weaver.Search`) and "watching" (not in Weaver yet).
+  (`Weaver.Search`) and "watching" (`Weaver.Push`).
 
   Joining holds the tenant up for as long as the channel lives.
   """
@@ -57,7 +57,11 @@ defmodule WeaverWeb.LobbyChannel do
     {:noreply, assign(socket, :search, pid)}
   end
 
-  def handle_in("watching", _params, socket), do: {:noreply, socket}
+  def handle_in("watching", %{"endpoint" => endpoint} = params, socket)
+      when is_binary(endpoint) do
+    WeaverWeb.At.at(socket, Weaver.Push, :watching, [endpoint, params["session"], self()])
+    {:noreply, socket}
+  end
 
   @impl true
   def handle_info({:agent_summary, summary}, socket) do
