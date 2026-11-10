@@ -25,26 +25,35 @@ defmodule Weaver.Guest do
   end
 
   @doc """
-  A file operation in `vm`: `read` gives `{:ok, binary}`, `list` and `stat`
-  `{:ok, decoded JSON}`, `write` (with `data`), `remove` and `mkdir` `:ok`.
-  A missing path is `{:error, :enoent}`.
+  A file operation in `vm` (see `guest/files.go` for each `op`).
+
+  `read` gives `{:ok, binary}`; `list`, `stat` and `walk` `{:ok, entries}`,
+  each `%{name, type, size, mtime}` with `type` an atom (`:file`, `:dir`,
+  `:symlink`, `:other`) and `mtime` in Unix milliseconds; the others `:ok`.
+  A missing path is `{:error, :enoent}`, a taken one `{:error, :eexist}`.
+
+  Options: `data` (for `write`), `to` (for `rename`), `user` (who owns what
+  the operation creates).
   """
-  def file(vm, op, path, data \\ nil) when op in ~w(read write list stat remove mkdir) do
+  def file(vm, op, path, opts \\ [])
+      when op in ~w(read write list stat walk rename remove mkdir) do
+    request = %{op: op, path: path, to: opts[:to] || "", user: opts[:user] || ""}
+
     with {:ok, sock} <- connect(vm) do
       try do
-        :ok = :gen_tcp.send(sock, [?F, JSON.encode!(%{op: op, path: path})])
+        :ok = :gen_tcp.send(sock, [?F, JSON.encode!(request)])
 
         if op == "write" do
-          for chunk <- chunks(IO.iodata_to_binary(data)),
+          for chunk <- chunks(IO.iodata_to_binary(opts[:data] || "")),
               do: :ok = :gen_tcp.send(sock, [?i, chunk])
 
           :ok = :gen_tcp.send(sock, "e")
         end
 
-        collect(sock, [])
-        |> case do
+        case collect(sock, []) do
           {:ok, out} when op == "read" -> {:ok, out}
-          {:ok, out} when op in ~w(list stat) -> {:ok, JSON.decode!(out)}
+          {:ok, out} when op == "stat" -> {:ok, entry(JSON.decode!(out))}
+          {:ok, out} when op in ~w(list walk) -> {:ok, Enum.map(JSON.decode!(out), &entry/1)}
           {:ok, _} -> :ok
           error -> error
         end
@@ -54,11 +63,36 @@ defmodule Weaver.Guest do
     end
   end
 
+  @doc """
+  A connection that appends to `path` in `vm`, for `Weaver.FS.Log`: every
+  `[?i, data]` frame sent on it is written and synced. Passive, as `connect/1`.
+  """
+  def open_append(vm, path, user) do
+    with {:ok, sock} <- connect(vm),
+         :ok <-
+           :gen_tcp.send(sock, [
+             ?F,
+             JSON.encode!(%{op: "append", path: path, to: "", user: user || ""})
+           ]) do
+      {:ok, sock}
+    end
+  end
+
+  defp entry(%{"name" => name, "type" => type, "size" => size, "mtime" => mtime}) do
+    %{name: name, type: type(type), size: size, mtime: mtime}
+  end
+
+  defp type("file"), do: :file
+  defp type("dir"), do: :dir
+  defp type("symlink"), do: :symlink
+  defp type(_), do: :other
+
   defp collect(sock, acc) do
-    case :gen_tcp.recv(sock, 0, 30_000) do
+    case :gen_tcp.recv(sock, 0, 60_000) do
       {:ok, <<?o, data::binary>>} -> collect(sock, [acc | data])
       {:ok, <<?q, 0::32>>} -> {:ok, IO.iodata_to_binary(acc)}
       {:ok, <<?f, "enoent">>} -> {:error, :enoent}
+      {:ok, <<?f, "eexist">>} -> {:error, :eexist}
       {:ok, <<?f, why::binary>>} -> {:error, why}
       {:error, _} = e -> e
     end

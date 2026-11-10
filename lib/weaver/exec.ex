@@ -20,6 +20,41 @@ defmodule Weaver.Exec do
     DynamicSupervisor.start_child(Weaver.Execs, {__MODULE__, {vm, argv, owner, opts}})
   end
 
+  @doc "Kill it: the connection closes, and the guest kills its process group."
+  def stop(pid) do
+    GenServer.stop(pid, :normal)
+  catch
+    :exit, _ -> :ok
+  end
+
+  @doc "Run `argv` in `vm` on this host and wait: `{:ok, %{stdout, stderr, status}}`."
+  def run(vm, argv, opts \\ [], timeout \\ 60_000) do
+    with {:ok, pid} <- start(vm, argv, self(), opts) do
+      close(pid)
+      collect(pid, [], [], timeout)
+    end
+  end
+
+  defp collect(pid, out, err, timeout) do
+    receive do
+      {^pid, {:data, :stdout, d}} ->
+        collect(pid, [out | d], err, timeout)
+
+      {^pid, {:data, :stderr, d}} ->
+        collect(pid, out, [err | d], timeout)
+
+      {^pid, {:exit_status, s}} ->
+        {:ok, %{stdout: IO.iodata_to_binary(out), stderr: IO.iodata_to_binary(err), status: s}}
+
+      {^pid, {:error, why}} ->
+        {:error, why}
+    after
+      timeout ->
+        stop(pid)
+        {:error, :timeout}
+    end
+  end
+
   def write(pid, data), do: GenServer.cast(pid, {:frame, ?i, data})
   def close(pid), do: GenServer.cast(pid, {:frame, ?e, ""})
   def signal(pid, n), do: GenServer.cast(pid, {:frame, ?k, <<n>>})

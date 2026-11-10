@@ -12,4 +12,6 @@ config :weaver, WeaverWeb.Endpoint,
 config :weaver, domain: "luozhen.cloud"
 
 config :phoenix, :json_library, Jason
+
+config :mime, :types, %{"application/manifest+json" => ["webmanifest"]}
 config :logger, level: :info

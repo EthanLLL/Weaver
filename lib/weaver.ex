@@ -1,9 +1,9 @@
 defmodule Weaver do
   @moduledoc """
-  The control plane: every tenant VM on every connected host, as one list.
+  The control plane's operator API: every tenant VM on every connected host.
 
-  There is no registry. Each host knows its own VMs (`Weaver.Host`); asking
-  the cluster is asking every node.
+  Each host knows its own VMs (`Weaver.Host`); `tenants/0` asks every node.
+  Where one tenant is, is a `:pg` lookup (`Weaver.Tenant.vm_node/1`).
   """
 
   @doc "All tenants: `%{name, node, status}`."
@@ -20,12 +20,7 @@ defmodule Weaver do
   end
 
   @doc "The node a tenant's VM is on."
-  def where(tenant) do
-    case Enum.find(tenants(), &(&1.name == tenant)) do
-      nil -> {:error, :no_such_tenant}
-      t -> {:ok, t.node}
-    end
-  end
+  def where(tenant), do: Weaver.Tenant.vm_node(tenant)
 
   def start(tenant), do: on(tenant, :start)
   def stop(tenant), do: on(tenant, :stop)
@@ -35,9 +30,9 @@ defmodule Weaver do
   end
 
   @doc "A file operation in a tenant's VM (see `Weaver.Guest.file/4`)."
-  def file(tenant, op, path, data \\ nil) do
+  def file(tenant, op, path, opts \\ []) do
     with {:ok, node} <- where(tenant),
-         do: :erpc.call(node, Weaver.Guest, :file, [tenant, op, path, data], 60_000)
+         do: :erpc.call(node, Weaver.Guest, :file, [tenant, op, path, opts], 60_000)
   end
 
   @doc """

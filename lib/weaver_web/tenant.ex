@@ -6,7 +6,7 @@ defmodule WeaverWeb.Tenant do
     tenant = String.replace_suffix(host, suffix, "")
 
     with true <- tenant != host and tenant =~ ~r/\A[a-z0-9-]+\z/,
-         {:ok, _node} <- Weaver.where(tenant) do
+         true <- Weaver.Tenant.exists?(tenant) do
       {:ok, tenant}
     else
       _ -> :error

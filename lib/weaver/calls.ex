@@ -54,12 +54,19 @@ defmodule Weaver.Calls do
     end
   end
 
+  # The listener lives as long as the VM is on this host, so it is also what
+  # says where the VM is (`Weaver.Tenant.vm_node/1`).
   defp accept(lsock, vm) do
+    :pg.join(Weaver.PG, {:vm, vm}, self())
+    accept_loop(lsock, vm)
+  end
+
+  defp accept_loop(lsock, vm) do
     {:ok, sock} = :gen_tcp.accept(lsock)
     pid = spawn(fn -> serve(sock, vm) end)
     :gen_tcp.controlling_process(sock, pid)
     send(pid, :go)
-    accept(lsock, vm)
+    accept_loop(lsock, vm)
   end
 
   defp serve(sock, vm) do

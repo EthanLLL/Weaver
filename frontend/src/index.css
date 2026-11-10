@@ -1,0 +1,65 @@
+html,
+body,
+#root {
+  height: 100%;
+  /* The visible height on a phone, which `100%` is not once the browser's
+     toolbar or the keyboard takes part of it. */
+  height: 100dvh;
+  /* Set while an iOS keyboard is up; see viewport.ts. */
+  height: var(--app-height, 100dvh);
+  margin: 0;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+/* Every font size in the app is in rem, so this is the one knob. 1rem is body
+   text. Percentages rather than px so a browser's own font-size preference
+   still scales it. */
+html {
+  font-size: 93.75%; /* 15px */
+}
+
+/* Phones: 16px is also the floor below which iOS zooms the page when an input
+   is focused, and the composer is 1rem. */
+@media (max-width: 640px) {
+  html {
+    font-size: 100%;
+  }
+}
+
+@media (min-width: 1600px) {
+  html {
+    font-size: 100%; /* 16px */
+  }
+}
+
+@media (min-width: 2200px) {
+  html {
+    font-size: 112.5%; /* 18px */
+  }
+}
+
+/* Icons are Lucide's, sized by the font-size of what holds them, so a button
+   sets its icon's size the way it would set a glyph's. */
+svg.lucide {
+  flex: none;
+  width: 1em;
+  height: 1em;
+}
+
+/* No scrollbars anywhere: sidebar, transcript, tool output, the composer, the
+   terminals. Every one of them scrolls by wheel, trackpad or touch, and a bar
+   only took width and drew a light stripe down a dark UI. The transcript has a
+   jump-to-bottom button for the one thing a bar was good for. */
+* {
+  scrollbar-width: none;
+}
+
+*::-webkit-scrollbar {
+  display: none;
+}
+
+/* xterm 6 draws its own scrollbar out of DOM, not the native one above. */
+.xterm .xterm-scrollable-element > .scrollbar {
+  display: none !important;
+}

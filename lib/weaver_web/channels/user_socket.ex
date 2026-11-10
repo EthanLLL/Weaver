@@ -1,12 +1,14 @@
-defmodule WeaverWeb.Socket do
+defmodule WeaverWeb.UserSocket do
   @moduledoc """
-  A browser's connection: a token from `POST /login`, and the tenant, settled
-  here once from the host it connected to; every channel on the socket is
-  that tenant's.
+  A browser's connection: the token from `POST /api/login`, and the tenant,
+  settled here once from the host it connected to. Every channel on the
+  socket is that tenant's, whatever its topic says.
   """
   use Phoenix.Socket
 
-  channel("terminal", WeaverWeb.TerminalChannel)
+  channel("agents", WeaverWeb.LobbyChannel)
+  channel("agent:*", WeaverWeb.AgentChannel)
+  channel("terminal:*", WeaverWeb.TerminalChannel)
 
   @impl true
   def connect(%{"token" => token}, socket, %{uri: %URI{host: host}}) do

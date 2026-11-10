@@ -13,7 +13,7 @@ for h in "${hosts[@]}"; do
 done
 peers=$(for h in "${hosts[@]}"; do printf 'weaver@%s,' "${ip[$h]}"; done); peers=${peers%,}
 [ -f .cookie ] || (umask 077; head -c 24 /dev/urandom | base64 | tr -d '/+=' > .cookie)
-tar czf /tmp/weaver-app.tgz mix.exs mix.lock config lib host
+tar czf /tmp/weaver-app.tgz mix.exs mix.lock config lib host priv
 (cd guest && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags='-s -w' -o weaver-guest .)
 
 for h in "${hosts[@]}"; do

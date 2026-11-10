@@ -15,6 +15,13 @@ Status: experiment.
                                                  │ vsock (Unix socket per VM)
                                               tenant VM ── weaver-guest (Go) ── processes
 
+- `lib/weaver/agent*`, `lib/weaver/terminal*`, `lib/weaver_web/`, `frontend/` —
+  Loom's sessions, terminals, API and UI, ported per tenant: everything a
+  tenant has runs on its VM's node (`Weaver.Tenant`: started on demand, gone
+  when idle, found through `:pg`), and everything it keeps is in the VM
+  (`Weaver.FS`, over the guest). The tenant is the host name,
+  `<tenant>.luozhen.cloud`; one password for all, as in Loom. Not ported
+  yet: Codex, cron, search, push, devices, the shared browser, apps.
 - `lib/` — the Elixir node every host runs. `Weaver` is the cluster-wide API
   (`tenants/0`, `start/1`, `stop/1`, `run/2`, `file/4`); `Weaver.Exec` is a
   process in a VM, with or without a terminal, held like a port from any node;
